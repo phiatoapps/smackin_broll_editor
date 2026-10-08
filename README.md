@@ -110,6 +110,16 @@ auto-detection; `--pad-before` / `--pad-after` control how tight the cuts are;
 couldn't find are listed at the end. `plan.json` holds every cut; edit it and
 re-run the same command to tweak timing without re-transcribing.
 
+### Three or more characters
+
+`broll_editor.multiscreen` handles takes where the characters stand close together
+and overlap. Instead of straight lines it cuts a curved seam around whoever is
+standing there, every frame: an empty-room plate (median of all takes) shows what
+is "someone" in each take, the speaker wins where two people overlap, and props
+(things that stay put on the counter) are kept whole and in front. It's driven
+from Python with an `MPlan` (characters with their take ranges, left to right,
+plus the chosen takes); see the module docstring.
+
 ## Use from Python
 
 ```python
