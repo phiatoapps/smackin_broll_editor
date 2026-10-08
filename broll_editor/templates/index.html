@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smackin B-roll Editor</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --line: #2a2f3a; --text: #e8eaf0;
+    --muted: #8a91a0; --accent: #ff3d6e; --accent-2: #2ec5ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; padding: 16px; } .preview-col { order: -1; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  section h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .clip h2 b { color: var(--text); }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: #0c0e12; color: var(--text); font: inherit; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=color] { width: 48px; height: 34px; border: none; background: none; padding: 0; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; text-align: center;
+          color: var(--muted); cursor: pointer; transition: border-color .15s; }
+  .drop.over, .drop:hover { border-color: var(--accent-2); color: var(--text); }
+  .drop.has { border-style: solid; border-color: var(--accent-2); color: var(--text); }
+  .or { text-align: center; color: var(--muted); font-size: 12px; margin: 8px 0; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .val { float: right; color: var(--text); }
+  .preview-col { position: sticky; top: 16px; align-self: start; }
+  .phone { width: 100%; max-width: 300px; aspect-ratio: 9 / 16; margin: 0 auto; background: #000;
+           border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; position: relative;
+           border: 1px solid var(--line); }
+  .pane { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+          color: #555; font-size: 13px; background: #111; }
+  .pane video { width: 100%; height: 100%; position: absolute; inset: 0; }
+  .pane video.bg { object-fit: cover; filter: blur(12px) brightness(.85); transform: scale(1.1); }
+  .divider { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+  button { width: 100%; padding: 13px; border: none; border-radius: 10px; background: var(--accent);
+           color: #fff; font: 600 16px system-ui, sans-serif; cursor: pointer; margin-top: 14px; }
+  button:disabled { opacity: .5; cursor: progress; }
+  .bar { height: 8px; background: #0c0e12; border-radius: 4px; overflow: hidden; margin-top: 12px; display: none; }
+  .bar div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
+  #msg { margin-top: 10px; font-size: 14px; min-height: 20px; }
+  #msg.err { color: #ff6b6b; }
+  #result { display: none; margin-top: 14px; }
+  #result video { width: 100%; border-radius: 10px; background: #000; }
+  #result a { display: block; text-align: center; margin-top: 8px; color: var(--accent-2); font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header><h1>Smackin <span>B-roll</span> Editor</h1></header>
+<main>
+<form id="form">
+  <section class="clip">
+    <h2>Top · <b>Talking head</b></h2>
+    <div class="drop" data-kind="top">Drop a video here or click to choose</div>
+    <input type="file" name="top_file" accept="video/*" hidden>
+    <div class="or">— or paste a Google Drive link —</div>
+    <input type="text" name="top_url" placeholder="https://drive.google.com/file/d/...">
+    <div class="row">
+      <div><label>Fit</label>
+        <select name="top_fit"><option value="cover">Fill (crop)</option><option value="blur">Fit + blurred background</option></select></div>
+      <div><label>Start at (sec)</label><input type="number" name="top_start" value="0" min="0" step="0.1"></div>
+    </div>
+    <label>Horizontal crop <span class="val" data-for="top_focus_x"></span></label>
+    <input type="range" name="top_focus_x" min="0" max="100" value="50">
+    <label>Vertical crop <span class="val" data-for="top_focus_y"></span></label>
+    <input type="range" name="top_focus_y" min="0" max="100" value="50">
+  </section>
+
+  <section class="clip">
+    <h2>Bottom · <b>B-roll</b></h2>
+    <div class="drop" data-kind="bottom">Drop a video here or click to choose</div>
+    <input type="file" name="bottom_file" accept="video/*" hidden>
+    <div class="or">— or paste a Google Drive link —</div>
+    <input type="text" name="bottom_url" placeholder="https://drive.google.com/file/d/...">
+    <div class="row">
+      <div><label>Fit</label>
+        <select name="bottom_fit"><option value="cover">Fill (crop)</option><option value="blur">Fit + blurred background</option></select></div>
+      <div><label>Start at (sec)</label><input type="number" name="bottom_start" value="0" min="0" step="0.1"></div>
+    </div>
+    <label>Horizontal crop <span class="val" data-for="bottom_focus_x"></span></label>
+    <input type="range" name="bottom_focus_x" min="0" max="100" value="50">
+    <label>Vertical crop <span class="val" data-for="bottom_focus_y"></span></label>
+    <input type="range" name="bottom_focus_y" min="0" max="100" value="50">
+  </section>
+
+  <section>
+    <h2>Layout &amp; audio</h2>
+    <label>Top panel height <span class="val" data-for="split"></span></label>
+    <input type="range" name="split" min="20" max="80" value="50">
+    <div class="row">
+      <div><label>Divider line (px)</label><input type="number" name="divider_px" value="0" min="0" max="40"></div>
+      <div><label>Divider color</label><input type="color" name="divider_color" value="#ffffff"></div>
+    </div>
+    <div class="row">
+      <div><label>Audio</label>
+        <select name="audio_mode">
+          <option value="top">Talking head only</option>
+          <option value="mix">Talking head + b-roll</option>
+          <option value="bottom">B-roll only</option>
+          <option value="none">Silent</option>
+        </select></div>
+      <div><label>Length follows</label>
+        <select name="duration_mode">
+          <option value="top">Talking head</option>
+          <option value="bottom">B-roll</option>
+          <option value="shortest">Shorter clip</option>
+        </select></div>
+    </div>
+    <div id="volrow">
+      <label>B-roll volume <span class="val" data-for="bottom_volume"></span></label>
+      <input type="range" name="bottom_volume" min="0" max="100" value="15">
+    </div>
+    <div class="row">
+      <div><label>Max length (sec, optional)</label><input type="number" name="max_duration" min="1" step="0.1" placeholder="no limit"></div>
+      <div><label>Speed vs. quality</label>
+        <select name="preset">
+          <option value="veryfast">Fast render</option>
+          <option value="medium" selected>Balanced</option>
+          <option value="slow">Best quality</option>
+        </select></div>
+    </div>
+    <p class="hint">The shorter clip loops so the video never freezes. Drive files must be shared as “Anyone with the link”.</p>
+  </section>
+</form>
+
+<div class="preview-col">
+  <section>
+    <h2>Preview (1080×1920)</h2>
+    <div class="phone" id="phone">
+      <div class="pane" id="pane-top">Talking head</div>
+      <div class="pane" id="pane-bottom">B-roll</div>
+      <div class="divider" id="divider"></div>
+    </div>
+    <button id="go" type="button">Render video</button>
+    <div class="bar" id="bar"><div></div></div>
+    <div id="msg"></div>
+    <div id="result">
+      <video id="out" controls playsinline></video>
+      <a id="dl" href="#">Download MP4</a>
+    </div>
+  </section>
+</div>
+</main>
+
+<script>
+const form = document.getElementById('form');
+const $ = (n) => form.elements[n];
+const panes = { top: document.getElementById('pane-top'), bottom: document.getElementById('pane-bottom') };
+
+// --- file pickers / drag & drop -------------------------------------------
+document.querySelectorAll('.drop').forEach((zone) => {
+  const kind = zone.dataset.kind;
+  const input = $(kind + '_file');
+  zone.onclick = () => input.click();
+  zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('over'); };
+  zone.ondragleave = () => zone.classList.remove('over');
+  zone.ondrop = (e) => {
+    e.preventDefault(); zone.classList.remove('over');
+    if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; input.onchange(); }
+  };
+  input.onchange = () => {
+    const f = input.files[0];
+    if (!f) return;
+    zone.textContent = '✓ ' + f.name;
+    zone.classList.add('has');
+    setPreview(kind, URL.createObjectURL(f));
+  };
+});
+
+function setPreview(kind, url) {
+  const pane = panes[kind];
+  pane.textContent = '';
+  for (const cls of ['bg', 'fg']) {
+    const v = document.createElement('video');
+    v.src = url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+    v.className = cls;
+    pane.appendChild(v);
+  }
+  updateLayout();
+}
+
+// --- live layout preview --------------------------------------------------
+function updateLayout() {
+  const split = +$('split').value;
+  panes.top.style.height = split + '%';
+  panes.bottom.style.height = (100 - split) + '%';
+
+  for (const kind of ['top', 'bottom']) {
+    const fit = $(kind + '_fit').value;
+    const x = $(kind + '_focus_x').value, y = $(kind + '_focus_y').value;
+    const [bg, fg] = panes[kind].querySelectorAll('video');
+    if (!fg) continue;
+    bg.style.display = fit === 'blur' ? '' : 'none';
+    fg.style.objectFit = fit === 'blur' ? 'contain' : 'cover';
+    fg.style.objectPosition = `${x}% ${y}%`;
+  }
+
+  const phone = document.getElementById('phone');
+  const div = document.getElementById('divider');
+  const px = +$('divider_px').value * phone.clientHeight / 1920;
+  div.style.height = px + 'px';
+  div.style.top = `calc(${split}% - ${px / 2}px)`;
+  div.style.background = $('divider_color').value;
+
+  document.getElementById('volrow').style.display = $('audio_mode').value === 'mix' ? '' : 'none';
+  document.querySelectorAll('.val').forEach((s) => {
+    const n = s.dataset.for, v = $(n).value;
+    s.textContent = n === 'split' || n === 'bottom_volume' ? v + '%' : v;
+  });
+}
+form.addEventListener('input', updateLayout);
+window.addEventListener('resize', updateLayout);
+updateLayout();
+
+// --- render ----------------------------------------------------------------
+const go = document.getElementById('go'), bar = document.getElementById('bar'), msg = document.getElementById('msg');
+
+function say(text, err) { msg.textContent = text; msg.className = err ? 'err' : ''; }
+
+go.onclick = async () => {
+  go.disabled = true;
+  document.getElementById('result').style.display = 'none';
+  bar.style.display = 'block'; bar.firstElementChild.style.width = '0';
+  say('Uploading…');
+  try {
+    const res = await fetch('/render', { method: 'POST', body: new FormData(form) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    await poll(data.job_id);
+  } catch (e) {
+    say(e.message, true);
+    bar.style.display = 'none';
+  } finally {
+    go.disabled = false;
+  }
+};
+
+async function poll(id) {
+  for (;;) {
+    const job = await (await fetch('/status/' + id)).json();
+    bar.firstElementChild.style.width = (job.progress * 100).toFixed(1) + '%';
+    if (job.status === 'error') throw new Error(job.error);
+    if (job.status === 'done') {
+      say('Done!');
+      const out = document.getElementById('out');
+      out.src = '/video/' + id;
+      document.getElementById('dl').href = '/video/' + id + '?download=1';
+      document.getElementById('result').style.display = 'block';
+      return;
+    }
+    say(job.status === 'downloading' ? 'Fetching clips…' :
+        job.status === 'rendering' ? `Rendering… ${(job.progress * 100).toFixed(0)}%` : 'Starting…');
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+</script>
+</body>
+</html>
