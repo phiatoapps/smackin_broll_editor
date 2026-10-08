@@ -62,7 +62,7 @@ class SplitOptions:
     # Seam position as a fraction of the frame width (None = auto-detect).
     seam: float | None = None
     # Width of the soft edge on the seam, fraction of frame width.
-    feather: float = 0.04
+    feather: float = 0.10
     # Extra time kept before/after each line's words.
     pad_before: float = 0.08
     pad_after: float = 0.15
@@ -272,6 +272,7 @@ class Segment:
     listen_rate: float = 1.0  # <1 = listening footage slowed to fill a short gap
     zoom: bool = False
     text: str = ""
+    seam: float | None = None  # this segment's seam (None = the plan's seam)
 
 
 @dataclass
@@ -282,6 +283,8 @@ class Plan:
     sides: dict[str, str]   # speaker name -> side
     segments: list[Segment] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    # RGB gains applied to second-half footage so both takes' lighting matches.
+    second_gain: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -405,6 +408,78 @@ def build_plan(lines: list[Line], words: list[Word], duration: float,
     return schedule(takes, words, duration, switch, first_side, seam, sides, missing)
 
 
+# ---------------------------------------------------------------- lighting match and per-segment seams
+
+_SW, _SH = 135, 240  # sampling size for color/seam analysis
+
+
+def _sample(raw: Path, start: float, dur: float, fps: float) -> np.ndarray:
+    """(n, _SH, _SW, 3) float RGB frames from raw[start:start+dur]."""
+    out = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{max(0.0, start):.3f}", "-t", f"{dur:.3f}", "-i", str(raw),
+         "-vf", f"fps={fps},scale={_SW}:{_SH}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        check=True, capture_output=True,
+    ).stdout
+    return np.frombuffer(out, np.uint8).reshape(-1, _SH, _SW, 3).astype(np.float32)
+
+
+def match_lighting(raw: str | Path, plan: Plan, duration: float) -> list[float]:
+    """RGB gains that make second-half footage match the first half's exposure / white balance.
+
+    Compares the two halves' median frames on pixels that are static background in
+    both (no one moving there, and both halves agree on what's there).
+    """
+    raw = Path(raw)
+    a = _sample(raw, 0, plan.switch_time, 1)
+    b = _sample(raw, plan.switch_time, duration - plan.switch_time, 1)
+    ma, mb = np.median(a, axis=0), np.median(b, axis=0)
+    still = (a.std(axis=0).max(-1) < 6) & (b.std(axis=0).max(-1) < 6)
+    la, lb = ma.mean(-1), mb.mean(-1)
+    ratio = la / np.maximum(lb, 1)
+    ok = still & (la > 20) & (lb > 20) & (la < 235) & (lb < 235)
+    if ok.sum() < 200:
+        return [1.0, 1.0, 1.0]
+    r0 = np.median(ratio[ok])
+    ok &= np.abs(ratio - r0) < 0.12 * r0  # drop pixels where a person sat still in one half
+    gains = [float(np.median(ma[..., c][ok] / np.maximum(mb[..., c][ok], 1))) for c in range(3)]
+    return [round(min(max(g, 0.7), 1.4), 4) for g in gains]
+
+
+def choose_seams(raw: str | Path, plan: Plan, opts: SplitOptions, reach: float = 0.18) -> None:
+    """Give each segment its own seam: the column where the two takes look most alike.
+
+    A person (or an arm reaching across) makes the takes differ, so the seam slides
+    away from them. Uses the worst frame in the segment, over the whole soft-edge
+    width, so a quick lean still counts. Stays within `reach` of the plan's seam.
+    """
+    raw = Path(raw)
+    gain = np.array(plan.second_gain, np.float32)
+    fw = max(3, int(round(opts.feather * _SW)))
+    x = np.arange(_SW) / _SW
+    for seg in plan.segments:
+        if seg.zoom:
+            continue
+        a = _sample(raw, seg.start, seg.duration, 6)
+        b = _sample(raw, seg.listen_start, seg.duration * seg.listen_rate, 6 / seg.listen_rate)
+        n = min(len(a), len(b))
+        if n == 0:
+            continue
+        a, b = a[:n], b[:n]
+        if seg.start >= plan.switch_time:
+            a = a * gain
+        if seg.listen_start >= plan.switch_time:
+            b = b * gain
+        diff = np.abs(a - b).sum(-1)                          # (n, H, W)
+        diff = np.maximum(diff - 24, 0)                       # ignore noise / leftover lighting drift
+        col = diff.mean(axis=1)                               # (n, W)
+        kernel = np.ones(fw * 2 + 1) / (fw * 2 + 1)           # cover the feathered band + margin
+        col = np.stack([np.convolve(c, kernel, mode="same") for c in col])
+        cost = np.percentile(col, 95, axis=0)
+        cost = cost / (cost.max() or 1) + 0.15 * np.abs(x - plan.seam) / reach
+        cost[np.abs(x - plan.seam) > reach] = np.inf
+        seg.seam = round(float(x[int(np.argmin(cost))]), 4)
+
+
 # ---------------------------------------------------------------- rendering
 
 
@@ -437,9 +512,18 @@ def _label_png(path: Path, text: str, size: int) -> None:
     img.save(path)
 
 
+def _gain_filter(plan: Plan, t: float) -> str:
+    """Color correction for footage starting at raw time t (only second-half footage is adjusted)."""
+    r, g, b = plan.second_gain
+    if t < plan.switch_time or (r, g, b) == (1.0, 1.0, 1.0):
+        return ""
+    return f",colorchannelmixer=rr={r:.4f}:gg={g:.4f}:bb={b:.4f}"
+
+
 def _render_segment(raw: Path, seg: Segment, plan: Plan, opts: SplitOptions, out: Path,
                     mask: Path, labels: dict[str, Path]) -> None:
     W, H, fps = _even(opts.width), _even(opts.height), opts.fps
+    _mask_pgm(mask, W, H, plan.seam if seg.seam is None else seg.seam, opts.feather)
     frames = max(1, round(seg.duration * fps))
     dur = frames / fps
     fit = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={fps}"
@@ -452,13 +536,14 @@ def _render_segment(raw: Path, seg: Segment, plan: Plan, opts: SplitOptions, out
         cx = plan.seam * W / 2 if seg.speaker_side == "left" else (1 + plan.seam) * W / 2
         x = min(max(cx - zw / 2, 0), W - zw)
         y = min(max(H * 0.36 - zh / 2, 0), H - zh)
-        filters.append(f"[0:v]{fit},crop={zw:.0f}:{zh:.0f}:{x:.0f}:{y:.0f},scale={W}:{H},setsar=1[v0]")
+        filters.append(f"[0:v]{fit}{_gain_filter(plan, seg.start)},"
+                       f"crop={zw:.0f}:{zh:.0f}:{x:.0f}:{y:.0f},scale={W}:{H},setsar=1[v0]")
     else:
         cmd += ["-ss", f"{seg.listen_start:.3f}", "-t", f"{dur * seg.listen_rate + 0.5:.3f}", "-i", str(raw),
                 "-loop", "1", "-i", str(mask)]
         slow = f",setpts=PTS/{seg.listen_rate:.4f}" if seg.listen_rate != 1 else ""
-        filters.append(f"[1:v]setpts=PTS-STARTPTS{slow},{fit}[lst]")
-        filters.append(f"[0:v]setpts=PTS-STARTPTS,{fit}[spk]")
+        filters.append(f"[1:v]setpts=PTS-STARTPTS{slow},{fit}{_gain_filter(plan, seg.listen_start)}[lst]")
+        filters.append(f"[0:v]setpts=PTS-STARTPTS,{fit}{_gain_filter(plan, seg.start)}[spk]")
         lft = "[spk]" if seg.speaker_side == "left" else "[lst]"
         rgt = "[lst]" if seg.speaker_side == "left" else "[spk]"
         filters.append(f"[2:v]scale={W}:{H},format=gray[m]")
@@ -500,7 +585,6 @@ def render_plan(raw: str | Path, plan: Plan, output: str | Path, opts: SplitOpti
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         mask = tmp / "mask.pgm"
-        _mask_pgm(mask, W, H, plan.seam, opts.feather)
         labels = {}
         for side, text in (("left", opts.left_label), ("right", opts.right_label)):
             if text:
@@ -560,6 +644,10 @@ def make_split_screen(
             if transcript:
                 captions.save_transcript(words, transcript)
         plan = build_plan(lines, words, info.duration, switch, first_side, seam, opts)
+        if on_status:
+            on_status("matching lighting and seams")
+        plan.second_gain = match_lighting(raw, plan, info.duration)
+        choose_seams(raw, plan, opts)
         if plan_path:
             plan.save(plan_path)
     if on_status:
@@ -585,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--switch", type=float, default=None, help="seconds where the second half starts (default: auto)")
     p.add_argument("--first-side", choices=SIDES, default=None, help="your side in the first half (default: auto)")
     p.add_argument("--seam", type=float, default=None, help="mask seam, fraction of width (default: auto)")
-    p.add_argument("--feather", type=float, default=0.04, help="soft edge width, fraction of width")
+    p.add_argument("--feather", type=float, default=0.10, help="soft edge width, fraction of width")
     p.add_argument("--pad-before", type=float, default=0.08)
     p.add_argument("--pad-after", type=float, default=0.15)
     p.add_argument("--zoom", type=float, default=1.6, help="punch-in for [zoom] lines")

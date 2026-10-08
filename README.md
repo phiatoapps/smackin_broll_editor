@@ -98,7 +98,8 @@ Lysol: That's disgusting.
 What it does automatically:
 
 - finds where the raw clip switches halves and which side you started on (from where the motion is),
-- puts the mask seam in the gap between your two positions, with a soft edge so it's invisible,
+- puts the mask seam in the gap between your two positions, then nudges it per line away from anyone leaning across, with a wide soft edge,
+- matches the lighting of the second take to the first (exposure / white balance often drift between takes),
 - transcribes the clip (Whisper) and finds each script line in its speaker's half; if you said a line more than once, the last take wins,
 - plays the lines back to back in script order: the speaker's side plays the line, the other side plays your "listening" footage from the other take,
 - `[zoom]` lines punch in full-frame on the speaker.
