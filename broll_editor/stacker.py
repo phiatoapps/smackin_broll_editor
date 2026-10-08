@@ -61,6 +61,15 @@ class StackOptions:
     divider_px: int = 0
     divider_color: str = "white"
 
+    # Auto-captions from the talking head's speech, centered on the panel seam.
+    captions: bool = False
+    caption_words: int = 3
+    caption_size: int = 84
+    caption_color: str = "#FFFFFF"
+    caption_highlight: str = "#FFE135"
+    caption_uppercase: bool = True
+    whisper_model: str = "small"
+
     crf: int = 20
     preset: str = "medium"
 
@@ -80,6 +89,8 @@ class StackOptions:
                 raise ValueError(f"{name} must be between 0 and 1")
         if self.top_start < 0 or self.bottom_start < 0:
             raise ValueError("start offsets cannot be negative")
+        if self.caption_words < 1:
+            raise ValueError("caption_words must be at least 1")
 
 
 @dataclass
@@ -142,11 +153,8 @@ def _panel_filter(src: str, out: str, w: int, h: int, fit: str, fx: float, fy: f
     )
 
 
-def build_command(top: str | Path, bottom: str | Path, output: str | Path, opts: StackOptions) -> tuple[list[str], float]:
-    """Return (ffmpeg argv, output duration in seconds)."""
-    opts.validate()
-    top_info, bottom_info = probe(top), probe(bottom)
-
+def _output_duration(top_info: MediaInfo, bottom_info: MediaInfo, opts: StackOptions) -> tuple[float, float, float]:
+    """Return (top usable length, bottom usable length, output duration)."""
     top_len = max(0.0, top_info.duration - opts.top_start)
     bottom_len = max(0.0, bottom_info.duration - opts.bottom_start)
     if top_len <= 0:
@@ -162,10 +170,33 @@ def build_command(top: str | Path, bottom: str | Path, output: str | Path, opts:
         duration = min(top_len, bottom_len)
     if opts.max_duration:
         duration = min(duration, opts.max_duration)
+    return top_len, bottom_len, duration
 
-    w = _even(opts.width)
+
+def _panel_heights(opts: StackOptions) -> tuple[int, int, int]:
+    """Return (width, top panel height, bottom panel height), all even."""
     top_h = _even(opts.height * opts.split)
-    bottom_h = _even(opts.height) - top_h
+    return _even(opts.width), top_h, _even(opts.height) - top_h
+
+
+def _filter_path(path: Path) -> str:
+    """Escape a path for use as a filter option value inside -filter_complex."""
+    # Quoted for the graph parser; ':' (Windows drive letters) escaped for the option parser.
+    return "'" + str(path).replace("\\", "/").replace(":", "\\:") + "'"
+
+
+def build_command(
+    top: str | Path,
+    bottom: str | Path,
+    output: str | Path,
+    opts: StackOptions,
+    subtitles: Path | None = None,
+) -> tuple[list[str], float]:
+    """Return (ffmpeg argv, output duration in seconds). `subtitles` is an ASS file to burn in."""
+    opts.validate()
+    top_info, bottom_info = probe(top), probe(bottom)
+    top_len, bottom_len, duration = _output_duration(top_info, bottom_info, opts)
+    w, top_h, bottom_h = _panel_heights(opts)
 
     cmd = ["ffmpeg", "-y", "-hide_banner"]
     # Loop whichever clip is shorter than the output so neither panel freezes.
@@ -184,6 +215,10 @@ def build_command(top: str | Path, bottom: str | Path, output: str | Path, opts:
     if opts.divider_px > 0:
         t = opts.divider_px
         stacked += f",drawbox=x=0:y={top_h - t // 2}:w=iw:h={t}:color={opts.divider_color}:t=fill"
+    if subtitles is not None:
+        from .captions import FONTS_DIR
+
+        stacked += f",ass={_filter_path(subtitles)}:fontsdir={_filter_path(FONTS_DIR)}"
     filters.append(stacked + ",format=yuv420p[v]")
 
     audio_label = None
@@ -225,12 +260,55 @@ def stack_videos(
     output: str | Path,
     opts: StackOptions | None = None,
     on_progress: Callable[[float], None] | None = None,
+    transcript: str | Path | None = None,
+    on_status: Callable[[str], None] | None = None,
 ) -> Path:
-    """Render `top` over `bottom` into `output`. `on_progress` gets 0.0-1.0."""
+    """Render `top` over `bottom` into `output`. `on_progress` gets 0.0-1.0.
+
+    With `opts.captions`, the talking head is transcribed. If `transcript` is
+    given, words are loaded from it when it exists (so you can fix typos by
+    editing the JSON) and saved to it otherwise.
+    """
     opts = opts or StackOptions()
+    opts.validate()
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    cmd, duration = build_command(top, bottom, output, opts)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        subtitles = None
+        if opts.captions:
+            subtitles = Path(tmp) / "captions.ass"
+            subtitles.write_text(_captions_ass(top, bottom, opts, transcript, on_status))
+        if on_status:
+            on_status("rendering")
+        cmd, duration = build_command(top, bottom, output, opts, subtitles)
+        _run_ffmpeg(cmd, duration, on_progress)
+    return output
+
+
+def _captions_ass(top, bottom, opts: StackOptions, transcript, on_status) -> str:
+    from . import captions
+
+    if transcript and Path(transcript).is_file():
+        words = captions.load_transcript(transcript)
+    else:
+        if on_status:
+            on_status("transcribing")
+        words = captions.transcribe(top, opts.whisper_model)
+        if transcript:
+            captions.save_transcript(words, transcript)
+    _, _, duration = _output_duration(probe(top), probe(bottom), opts)
+    words = captions.shift_words(words, opts.top_start, duration)
+    w, top_h, _ = _panel_heights(opts)
+    return captions.build_ass(
+        words, w, _even(opts.height), top_h,
+        max_words=opts.caption_words, font_size=opts.caption_size,
+        color=opts.caption_color, highlight=opts.caption_highlight,
+        uppercase=opts.caption_uppercase,
+    )
+
+
+def _run_ffmpeg(cmd: list[str], duration: float, on_progress: Callable[[float], None] | None) -> None:
 
     # stderr goes to a temp file so a chatty ffmpeg can't fill a pipe and stall.
     with tempfile.TemporaryFile(mode="w+") as errlog:
@@ -250,4 +328,3 @@ def stack_videos(
         raise RuntimeError(f"ffmpeg failed:\n{stderr[-3000:]}")
     if on_progress:
         on_progress(1.0)
-    return output

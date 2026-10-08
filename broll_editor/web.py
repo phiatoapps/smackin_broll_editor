@@ -52,6 +52,12 @@ def _options_from_form(form) -> StackOptions:
         bottom_volume=_float(form, "bottom_volume", 15) / 100,
         divider_px=int(_float(form, "divider_px", 0)),
         divider_color=form.get("divider_color", "#ffffff").replace("#", "0x"),
+        captions=form.get("captions") == "on",
+        caption_words=int(_float(form, "caption_words", 3)),
+        caption_size=int(_float(form, "caption_size", 84)),
+        caption_color=form.get("caption_color", "#FFFFFF"),
+        caption_highlight=form.get("caption_highlight", "#FFE135"),
+        caption_uppercase=form.get("caption_uppercase") == "on",
         preset=form.get("preset", "medium"),
     )
 
@@ -61,9 +67,9 @@ def _run_job(job_id: str, job_dir: Path, top_src: str, bottom_src: str, opts: St
         _update(job_id, status="downloading")
         top = fetch(top_src, job_dir / "top", "top")
         bottom = fetch(bottom_src, job_dir / "bottom", "bottom")
-        _update(job_id, status="rendering")
         stack_videos(top, bottom, job_dir / "stacked.mp4", opts,
-                     on_progress=lambda f: _update(job_id, progress=f))
+                     on_progress=lambda f: _update(job_id, progress=f),
+                     on_status=lambda stage: _update(job_id, status=stage))
         _update(job_id, status="done", progress=1.0)
     except Exception as exc:
         traceback.print_exc()

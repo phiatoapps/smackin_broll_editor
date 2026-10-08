@@ -42,6 +42,10 @@
   .pane video { width: 100%; height: 100%; position: absolute; inset: 0; }
   .pane video.bg { object-fit: cover; filter: blur(12px) brightness(.85); transform: scale(1.1); }
   .divider { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; }
+  .capdemo { position: absolute; left: 0; right: 0; z-index: 3; transform: translateY(-50%); text-align: center;
+             font: 800 15px system-ui, sans-serif; color: #fff; pointer-events: none; display: none;
+             text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 3px #000; }
+  input[type=checkbox] { accent-color: var(--accent); margin-right: 6px; }
   button { width: 100%; padding: 13px; border: none; border-radius: 10px; background: var(--accent);
            color: #fff; font: 600 16px system-ui, sans-serif; cursor: pointer; margin-top: 14px; }
   button:disabled { opacity: .5; cursor: progress; }
@@ -94,6 +98,23 @@
   </section>
 
   <section>
+    <h2>Captions</h2>
+    <label style="color:var(--text)"><input type="checkbox" name="captions"> Auto-caption the talking head (on the divider)</label>
+    <div id="caprow">
+      <div class="row">
+        <div><label>Words at a time</label><input type="number" name="caption_words" value="3" min="1" max="8"></div>
+        <div><label>Text size (px)</label><input type="number" name="caption_size" value="84" min="30" max="160"></div>
+      </div>
+      <div class="row">
+        <div><label>Text color</label><input type="color" name="caption_color" value="#ffffff"></div>
+        <div><label>Spoken-word highlight</label><input type="color" name="caption_highlight" value="#ffe135"></div>
+      </div>
+      <label style="color:var(--text)"><input type="checkbox" name="caption_uppercase" checked> ALL CAPS</label>
+      <p class="hint">Speech is transcribed automatically; the first render takes a little longer.</p>
+    </div>
+  </section>
+
+  <section>
     <h2>Layout &amp; audio</h2>
     <label>Top panel height <span class="val" data-for="split"></span></label>
     <input type="range" name="split" min="20" max="80" value="50">
@@ -140,6 +161,7 @@
       <div class="pane" id="pane-top">Talking head</div>
       <div class="pane" id="pane-bottom">B-roll</div>
       <div class="divider" id="divider"></div>
+      <div class="capdemo" id="capdemo"></div>
     </div>
     <button id="go" type="button">Render video</button>
     <div class="bar" id="bar"><div></div></div>
@@ -212,6 +234,15 @@ function updateLayout() {
   div.style.top = `calc(${split}% - ${px / 2}px)`;
   div.style.background = $('divider_color').value;
 
+  const cap = document.getElementById('capdemo'), capsOn = $('captions').checked;
+  document.getElementById('caprow').style.display = capsOn ? '' : 'none';
+  cap.style.display = capsOn ? 'block' : 'none';
+  cap.style.top = split + '%';
+  cap.style.color = $('caption_color').value;
+  cap.style.fontSize = (+$('caption_size').value * phone.clientHeight / 1920) + 'px';
+  const sample = ['These', 'cashews', 'are'].map((w) => $('caption_uppercase').checked ? w.toUpperCase() : w);
+  cap.innerHTML = `${sample[0]} <span style="color:${$('caption_highlight').value}">${sample[1]}</span> ${sample[2]}`;
+
   document.getElementById('volrow').style.display = $('audio_mode').value === 'mix' ? '' : 'none';
   document.querySelectorAll('.val').forEach((s) => {
     const n = s.dataset.for, v = $(n).value;
@@ -219,6 +250,7 @@ function updateLayout() {
   });
 }
 form.addEventListener('input', updateLayout);
+form.addEventListener('change', updateLayout);
 window.addEventListener('resize', updateLayout);
 updateLayout();
 
@@ -259,6 +291,7 @@ async function poll(id) {
       return;
     }
     say(job.status === 'downloading' ? 'Fetching clips…' :
+        job.status === 'transcribing' ? 'Transcribing speech for captions…' :
         job.status === 'rendering' ? `Rendering… ${(job.progress * 100).toFixed(0)}%` : 'Starting…');
     await new Promise((r) => setTimeout(r, 700));
   }

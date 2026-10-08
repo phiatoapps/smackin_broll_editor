@@ -56,8 +56,25 @@ Useful options:
 | `--audio top\|mix\|bottom\|none` | Audio source; `mix` adds b-roll audio under the voice | `top` |
 | `--bottom-volume 0.15` | B-roll volume for `--audio mix` | `0.15` |
 | `--divider 6 --divider-color white` | Line between the two panels | off |
+| `--captions` | Auto-caption the talking head (Whisper), centered on the divider, spoken word highlighted | off |
+| `--transcript words.json` | Save the caption words here; if the file exists it's reused, so you can edit it to fix typos and re-render | |
+| `--caption-words 3 --caption-size 84` | Words shown at once / text size | |
+| `--caption-color "#FFFFFF" --caption-highlight "#FFE135"` | Caption colors | |
+| `--no-caption-caps` | Normal casing instead of ALL CAPS | |
 | `--size 1080x1920` | Output resolution | `1080x1920` |
 | `--crf 20 --preset medium` | Quality / speed trade-off | |
+
+### Captions
+
+```bash
+python -m broll_editor head.mp4 broll.mp4 -o final.mp4 --divider 8 --captions --transcript words.json
+```
+
+The first run downloads a Whisper speech model (~500 MB for `small`) and
+writes `words.json`. Fix any misheard words in that file and run the same
+command again; it reuses your edited words instead of re-transcribing.
+
+Captions use Montserrat ExtraBold (bundled, SIL Open Font License, see `broll_editor/fonts/OFL.txt`).
 
 ## Use from Python
 

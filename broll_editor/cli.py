@@ -33,6 +33,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bottom-volume", type=float, default=0.15, help="b-roll volume when --audio mix")
     p.add_argument("--divider", type=int, default=0, help="divider line thickness in px (0 = none)")
     p.add_argument("--divider-color", default="white")
+    p.add_argument("--captions", action="store_true", help="auto-caption the talking head's speech")
+    p.add_argument("--transcript", metavar="JSON",
+                   help="caption words file: loaded if it exists (edit it to fix typos), else saved here")
+    p.add_argument("--caption-words", type=int, default=3, help="max words shown at once (default 3)")
+    p.add_argument("--caption-size", type=int, default=84, help="caption font size in px (default 84)")
+    p.add_argument("--caption-color", default="#FFFFFF")
+    p.add_argument("--caption-highlight", default="#FFE135", help="color of the word being spoken")
+    p.add_argument("--no-caption-caps", action="store_true", help="keep original casing instead of ALL CAPS")
+    p.add_argument("--whisper-model", default="small", help="tiny/base/small/medium/large-v3 (default small)")
     p.add_argument("--crf", type=int, default=20, help="quality: lower = better/bigger (default 20)")
     p.add_argument("--preset", default="medium", help="x264 preset (ultrafast..veryslow)")
     args = p.parse_args(argv)
@@ -52,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
         duration_mode=args.duration, max_duration=args.max_duration,
         audio_mode=args.audio, bottom_volume=args.bottom_volume,
         divider_px=args.divider, divider_color=args.divider_color,
+        captions=args.captions or bool(args.transcript), caption_words=args.caption_words,
+        caption_size=args.caption_size, caption_color=args.caption_color,
+        caption_highlight=args.caption_highlight, caption_uppercase=not args.no_caption_caps,
+        whisper_model=args.whisper_model,
         crf=args.crf, preset=args.preset,
     )
 
@@ -59,11 +72,16 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"\rRendering... {frac * 100:5.1f}%")
         sys.stderr.flush()
 
+    def status(stage: str) -> None:
+        if stage == "transcribing":
+            sys.stderr.write("Transcribing speech for captions...\n")
+
     try:
         with tempfile.TemporaryDirectory() as tmp:
             top = fetch(args.top, tmp, "top")
             bottom = fetch(args.bottom, tmp, "bottom")
-            out = stack_videos(top, bottom, args.output, opts, on_progress=progress)
+            out = stack_videos(top, bottom, args.output, opts, on_progress=progress,
+                               transcript=args.transcript, on_status=status)
     except Exception as exc:  # surface a readable message instead of a traceback
         sys.stderr.write(f"\nError: {exc}\n")
         return 1
