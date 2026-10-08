@@ -306,6 +306,75 @@ def _first_speaker(lines: list[Line], words: list[Word], switch: float) -> str:
     return max(speakers, key=overlap)
 
 
+@dataclass
+class Take:
+    """One piece of footage for the edit: the speaker's side plays raw[start:end]."""
+    line: int
+    side: str
+    start: float
+    end: float
+    zoom: bool = False
+    text: str = ""
+
+
+def _speech_intervals(words: list[Word], lo: float, hi: float, margin: float = 0.15) -> list[tuple[float, float]]:
+    """Merged time ranges in [lo, hi) where anything was said (retakes and ad-libs included)."""
+    out: list[list[float]] = []
+    for w in words:
+        if lo <= w.start < hi:
+            a, b = w.start - margin, w.end + margin
+            if out and a <= out[-1][1]:
+                out[-1][1] = max(out[-1][1], b)
+            else:
+                out.append([a, b])
+    return [(a, b) for a, b in out]
+
+
+def schedule(takes: list[Take], words: list[Word], duration: float, switch: float,
+             first_side: str, seam: float, sides: dict[str, str], missing: list[str] | None = None) -> Plan:
+    """Lay takes back to back and pick each one's listening footage from the other take.
+
+    Listening footage never overlaps anything said in that half (so no silent
+    mouthing of a retake), runs continuously while the other character keeps
+    talking, and the first listening shot ends just before that side's first line.
+    """
+    second_side = "right" if first_side == "left" else "left"
+    halves = {first_side: (0.0, switch), second_side: (switch, duration)}
+    speech = {s: _speech_intervals(words, *halves[s]) for s in SIDES}
+    durs = [t.end - t.start for t in takes]
+
+    cursor = {}
+    for side in SIDES:
+        lo, hi = halves[side]
+        own = [k for k, t in enumerate(takes) if t.side == side]
+        if own:
+            lead = sum(durs[:own[0]])
+            cursor[side] = max(lo, takes[own[0]].start - lead - 0.2)
+        else:
+            cursor[side] = lo
+
+    plan = Plan(switch, first_side, seam, sides, missing=list(missing or []))
+    for t, dur in zip(takes, durs):
+        listener = second_side if t.side == first_side else first_side
+        lo, hi = halves[listener]
+        c = cursor[listener]
+        for a, b in speech[listener]:  # step out of speech
+            if a <= c < b:
+                c = b
+        prev_end = max([b for a, b in speech[listener] if b <= c + 1e-3] + [lo])
+        next_start = min([a for a, b in speech[listener] if a >= c - 1e-3] + [hi])
+        start, rate = c, 1.0
+        if next_start - start < dur:
+            start = max(prev_end, next_start - dur)
+            avail = next_start - start
+            if 0.3 < avail < dur:
+                rate = max(0.5, avail / dur)  # slow idle footage up to 2x rather than show lips moving
+        cursor[listener] = start + dur * rate
+        cursor[t.side] = t.end
+        plan.segments.append(Segment(t.line, t.side, t.start, dur, start, rate, t.zoom, t.text))
+    return plan
+
+
 def build_plan(lines: list[Line], words: list[Word], duration: float,
                switch: float, first_side: str, seam: float, opts: SplitOptions) -> Plan:
     first_speaker = _first_speaker(lines, words, switch)
@@ -313,47 +382,27 @@ def build_plan(lines: list[Line], words: list[Word], duration: float,
     second_side = "right" if first_side == "left" else "left"
     sides = {first_speaker: first_side, other: second_side}
     matches = align(lines, words, first_speaker, switch)
-
     halves = {first_side: (0.0, switch), second_side: (switch, duration)}
-    # Spoken intervals per side, in time order, to keep pads off neighbouring speech.
-    spoken = {s: sorted((m.start, m.end) for m, l in zip(matches, lines)
-                        if m and sides[l.speaker] == s) for s in SIDES}
-    side_words = {s: [w for w in words if halves[s][0] <= w.start < halves[s][1]] for s in SIDES}
 
     def padded(side: str, m: Match) -> tuple[float, float]:
+        """Pad a line's words, without running into neighbouring speech."""
         lo, hi = halves[side]
-        before = [w.end for w in side_words[side] if w.end <= m.start - 0.01]
-        after = [w.start for w in side_words[side] if w.start >= m.end + 0.01]
+        hw = [w for w in words if lo <= w.start < hi]
+        before = [w.end for w in hw if w.end <= m.start - 0.01]
+        after = [w.start for w in hw if w.start >= m.end + 0.01]
         a = max(m.start - opts.pad_before, (before[-1] + 0.02) if before else lo, lo)
         b = min(m.end + opts.pad_after, (after[0] - 0.02) if after else hi, hi)
         return a, max(b, a + 0.2)
 
-    plan = Plan(switch, first_side, seam, sides)
-    cursor = {s: halves[s][0] for s in SIDES}
+    takes, missing = [], []
     for i, (line, m) in enumerate(zip(lines, matches)):
         if m is None:
-            plan.missing.append(f"{line.speaker}: {line.text}")
+            missing.append(f"{line.speaker}: {line.text}")
             continue
         side = sides[line.speaker]
-        listener = second_side if side == first_side else first_side
         a, b = padded(side, m)
-        dur = b - a
-        cursor[side] = b
-
-        # Listening window: between the listener's previous and next spoken lines.
-        lo, hi = halves[listener]
-        prev_end = max([e for s, e in spoken[listener] if e <= cursor[listener] + 1e-3] + [lo])
-        next_start = min([s for s, e in spoken[listener] if s >= cursor[listener] - 1e-3] + [hi])
-        start = max(cursor[listener], prev_end)
-        rate = 1.0
-        if next_start - start < dur:
-            start = max(prev_end, next_start - dur)
-            avail = next_start - start
-            if avail < dur and avail > 0.3:
-                rate = max(0.5, avail / dur)  # slow idle footage up to 2x rather than show lips moving
-        cursor[listener] = start + dur * rate
-        plan.segments.append(Segment(i, side, a, dur, start, rate, line.zoom, line.text))
-    return plan
+        takes.append(Take(i, side, a, b, line.zoom, line.text))
+    return schedule(takes, words, duration, switch, first_side, seam, sides, missing)
 
 
 # ---------------------------------------------------------------- rendering
