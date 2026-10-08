@@ -4,15 +4,20 @@ Same idea as `splitscreen`: one locked-off raw clip in which you play each chara
 in turn, at a different spot in the frame. Here each character has a time range of
 the raw clip (their take) and an order from left to right.
 
-Straight vertical seams don't work when neighbours overlap, so every frame gets
-curved seams instead:
+Seams between neighbours can't work when they overlap (a seam through someone's
+shoulder blends it with another take's empty background: a see-through "ghost").
+So every frame is layered instead:
 
-* An empty-room plate (per-pixel median over all takes) serves as a reference.
-  Wherever a take differs from it, that take has someone (or a prop) there, so
-  take-specific props are always kept whole rather than flickering in and out.
-* Each row of the seam goes where it hides the least of either person, with the
-  current speaker weighted up, so when two people overlap the speaker stays whole.
-* Seams are kept smooth from row to row and frame to frame, then feathered.
+* An empty-room plate (each spot taken from takes whose character stands far from
+  it) is the reference. Wherever
+  a take differs from it, that take has someone (or a prop) there: that's their
+  silhouette, cleaned up and hole-filled.
+* Background (including that take's props) comes from whichever take "owns" that
+  part of the room, so props never pop in and out between cuts; people go on top
+  in a fixed depth order. A person can only be covered by another person's body,
+  never by background or a stray patch of another take.
+* Every rendered frame is checked for see-through person pixels (written to a
+  report), so problem spots can be found without watching the whole video.
 * All takes are colour-matched to the first one so the background is seamless.
 """
 
@@ -32,7 +37,7 @@ from .splitscreen import _label_png, _sample, _speech_intervals
 from .stacker import _run_ffmpeg
 
 FPS = 30
-_DS = 8  # analysis downscale factor for seam finding
+_DS = 4  # analysis downscale factor for person masks
 
 
 @dataclass
@@ -72,6 +77,11 @@ class MPlan:
     segments: list[MSegment] = field(default_factory=list)
     gains: dict[str, list[float]] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
+    # Height of the counter/table top as a fraction of frame height. Things that stay
+    # put during a take and stand on it are props (in front of people); things that
+    # stay put above it without touching it (a moved blanket, a picture) are scenery
+    # behind the people. None = treat everything that stays put as a prop.
+    counter_y: float | None = None
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -199,58 +209,173 @@ def match_gains(raw: str | Path, chars: list[Character]) -> dict[str, list[float
     return gains
 
 
-def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, list[float]]
-                     ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Empty-room estimate at analysis resolution: per-pixel median over all takes.
+def _sample_at(raw: Path, start: float, dur: float, fps: float, w: int, h: int) -> np.ndarray:
+    out = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{max(0.0, start):.3f}", "-t", f"{dur:.3f}", "-i", str(raw),
+         "-vf", f"fps={fps},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        check=True, capture_output=True,
+    ).stdout
+    return np.frombuffer(out, np.uint8).reshape(-1, h, w, 3).astype(np.float32)
 
-    Each spot in the frame has a person (or a take-specific prop) in it for less than
-    half the clip, so the median is the bare background - a fair reference for
-    deciding what in each take is "someone/something" vs. scenery.
 
-    Also returns, per take, a map of its props: spots that differ from the plate
-    but barely change during the take. Props sit on the counter in front of the
-    people, so the seams treat them as in front (never cut, never hidden by a person).
+def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, list[float]],
+                     size: tuple[int, int], counter_y: float | None = None, reach: float = 0.22
+                     ) -> tuple[np.ndarray, dict, dict, dict, dict]:
+    """Empty-room estimate at analysis resolution - the reference for deciding what in
+    each take is "someone/something" vs. scenery.
+
+    Also returns, per take, masks of what stays put but differs from the plate:
+    props (standing on the counter, in front of people, layered on top) and scenery
+    changes (e.g. a blanket moved between takes; behind people, never part of anyone's
+    silhouette).
     """
+    import cv2
+
     raw = Path(raw)
-    takes = {c.name: _sample(raw, c.lo, c.hi - c.lo, 1) * np.array(gains.get(c.name, [1, 1, 1]), np.float32)
+    w, h = size
+    takes = {c.name: _sample_at(raw, c.lo, c.hi - c.lo, 1, w, h) * np.array(gains.get(c.name, [1, 1, 1]), np.float32)
              for c in chars}
-    plate = np.median(np.concatenate(list(takes.values())), axis=0).astype(np.float32)
-    props = {}
+    medians = {name: np.median(f, axis=0).astype(np.float32) for name, f in takes.items()}
+    # Each spot comes only from takes whose character stands well away from it (so it
+    # is bare room in those takes), skipping any take that has a prop standing there.
+    # Where no far take is free, the farthest take without a prop there is used. (A
+    # plain median over all takes fails where two people's spots overlap.)
+    xs = (np.arange(w) + 0.5) / w
+    names = [c.name for c in chars]
+    centers = np.array([c.center for c in chars])
+    stack = np.stack([medians[n] for n in names])            # (k, h, w, 3)
+
+    def build(blocked: np.ndarray) -> np.ndarray:
+        out = np.zeros((h, w, 3), np.float32)
+        for x0 in range(w):
+            dist = np.abs(xs[x0] - centers)
+            order = np.argsort(-dist)
+            col = stack[:, :, x0]                              # (k, h, 3)
+            ok = ~blocked[:, :, x0]                            # (k, h)
+            far = (dist > reach)[:, None] & ok
+            vals = np.where(far[..., None], col, np.nan)
+            with np.errstate(all="ignore"):
+                import warnings
+
+                warnings.simplefilter("ignore", RuntimeWarning)
+                med = np.nanmedian(vals, axis=0) if far.any() else np.full((h, 3), np.nan)
+            need = np.isnan(med[:, 0])
+            for k in order:                                    # farthest free take
+                fill = need & ok[k]
+                med[fill] = col[k][fill]
+                need &= ~fill
+            med[need] = np.median(col, axis=0)[need]
+            out[:, x0] = med
+        return out
+
+    # Start from consensus: at each spot, the take whose usual picture agrees with the
+    # most other takes (ties go to the take whose character stands farthest away).
+    agree = np.zeros((len(names), h, w), np.float32)
+    for i in range(len(names)):
+        for j in range(len(names)):
+            if i != j:
+                agree[i] += np.abs(stack[i] - stack[j]).sum(-1) < 60
+    dist_all = np.abs(xs[None, :] - centers[:, None])           # (k, w)
+    agree += 0.5 * dist_all[:, None, :] / max(float(dist_all.max()), 1e-6)
+    pick = agree.argmax(axis=0)
+    plate = np.take_along_axis(stack, pick[None, ..., None].repeat(3, -1), axis=0)[0]
+    for _ in range(2):  # props found against the plate are excluded from the next plate
+        # (a take whose usual picture differs from the room there: a prop, steady or
+        # handled during the take - e.g. a bottle that's picked up later)
+        blocked = np.stack([np.abs(stack[i] - plate).sum(-1) > 60 for i in range(len(names))])
+        blocked = np.stack([cv2.dilate(b.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool) for b in blocked])
+        plate = build(blocked)
+    # Lighting can change across the room between takes (a lamp on in one take only),
+    # which a single colour gain can't fix. Per take, measure plate/take on bare room far
+    # from that take's character and spread it smoothly over the frame.
+    light = {}
+    for c in chars:
+        med = medians[c.name]
+        valid = (np.abs(xs - c.center) > reach)[None, :] & (np.abs(med - plate).sum(-1) < 90)
+        valid &= (med.mean(-1) > 15)
+        wv = cv2.GaussianBlur(valid.astype(np.float32), (0, 0), 25) + 1e-4
+        g = np.ones((h, w, 3), np.float32)
+        for k in range(3):
+            ratio = np.where(valid, plate[..., k] / np.maximum(med[..., k], 1), 0).astype(np.float32)
+            g[..., k] = cv2.GaussianBlur(ratio, (0, 0), 25) / wv
+        g[wv < 0.02] = 1.0
+        light[c.name] = np.clip(g, 0.6, 1.6)
+        takes[c.name] = takes[c.name] * light[c.name]
+        medians[c.name] = med * light[c.name]
+    props, scenery = {}, {}
     for name, f in takes.items():
-        differs = np.abs(np.median(f, axis=0) - plate).sum(-1) > 60
+        differs = np.abs(medians[name] - plate).sum(-1) > 60
         steady = f.std(axis=0).max(-1) < 12
-        m = (differs & steady).astype(np.float32)
-        # grow a little so the whole object (edges included) counts
-        for axis in (0, 1):
-            m = np.maximum.reduce([np.roll(m, k, axis=axis) for k in (-2, -1, 0, 1, 2)])
-        props[name] = m
-    return plate, props
-
-
-# ---------------------------------------------------------------- seams
-
-
-def _row_seam(cost: np.ndarray, prev: np.ndarray | None, lam_t: float, step: int = 2) -> np.ndarray:
-    """Minimal-cost top-to-bottom path through cost (H, W), moving <= step columns per row."""
-    H, W = cost.shape
-    if prev is not None:
-        cost = cost + lam_t * np.abs(np.arange(W)[None, :] - prev[:, None])
-    acc = cost.copy()
-    back = np.zeros((H, W), np.int16)
-    big = np.float32(1e18)
-    for y in range(1, H):
-        p = acc[y - 1]
-        cands = np.full((2 * step + 1, W), big, np.float32)
-        for k, d in enumerate(range(-step, step + 1)):
-            if d < 0:
-                cands[k, -d:] = p[:d] + abs(d) * 0.02
-            elif d > 0:
-                cands[k, :-d] = p[d:] + d * 0.02
+        m = (differs & steady).astype(np.uint8)
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        m = cv2.dilate(m, np.ones((5, 5), np.uint8))
+        prop = np.zeros((h, w), bool)
+        back = np.zeros((h, w), bool)
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+        for i in range(1, n):
+            bottom = (stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) / h
+            if counter_y is None or bottom >= counter_y - 0.01:
+                prop |= lab == i
             else:
-                cands[k] = p
-        k = cands.argmin(axis=0)
-        acc[y] += cands[k, np.arange(W)]
-        back[y] = k - step
+                back |= lab == i
+        props[name], scenery[name] = prop, back
+    return plate, props, scenery, medians, light
+
+
+# ---------------------------------------------------------------- layered compositing
+
+_KERN_CLOSE = None
+
+
+def _person_mask(frame: np.ndarray, plate: np.ndarray, zone: np.ndarray, thr: float = 45) -> np.ndarray:
+    """Solid silhouette of whatever in this take differs from the empty room, inside its zone."""
+    import cv2
+
+    d = np.abs(frame - plate).sum(-1)
+    m = ((d > thr) & zone).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
+    # fill holes (a hoodie the same colour as the wall behind it still counts as hoodie)
+    inv = (1 - m).astype(np.uint8)
+    h, w = m.shape
+    ff = inv.copy()
+    mask = np.zeros((h + 2, w + 2), np.uint8)
+    for x in range(0, w, 8):
+        for y in (0, h - 1):
+            if ff[y, x]:
+                cv2.floodFill(ff, mask, (x, y), 0)
+    for y in range(0, h, 8):
+        for x in (0, w - 1):
+            if ff[y, x]:
+                cv2.floodFill(ff, mask, (x, y), 0)
+    m = m | ff
+    # drop specks
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    keep = np.zeros(n, bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= 120
+    return keep[lab]
+
+
+def _row_path(cost: np.ndarray, step: int = 1) -> np.ndarray:
+    """Cheapest top-to-bottom path through cost (H, W), moving <= step columns per row."""
+    H, W = cost.shape
+    acc = cost.copy()
+    back = np.zeros((H, W), np.int8)
+    for y in range(1, H):
+        prev = acc[y - 1]
+        best = prev.copy()
+        arg = np.zeros(W, np.int8)
+        for d in range(1, step + 1):
+            left = np.full(W, np.inf, np.float32)
+            left[d:] = prev[:-d]
+            right = np.full(W, np.inf, np.float32)
+            right[:-d] = prev[d:]
+            m = left < best
+            best[m], arg[m] = left[m], -d
+            m = right < best
+            best[m], arg[m] = right[m], d
+        acc[y] += best
+        back[y] = arg
     path = np.zeros(H, np.int32)
     path[-1] = int(acc[-1].argmin())
     for y in range(H - 1, 0, -1):
@@ -258,52 +383,140 @@ def _row_seam(cost: np.ndarray, prev: np.ndarray | None, lam_t: float, step: int
     return path
 
 
-class SeamTracker:
-    """Curved seam between a left and a right take, tracked frame to frame."""
+class LayerCompositor:
+    """Per-frame layering of the takes: background by zone, people on top in a fixed
+    depth order, props on top of everyone. A person's pixels can only ever be covered
+    by another person's body or a prop - never by another take's background - so
+    there is no see-through ghosting.
+    """
 
-    def __init__(self, band: tuple[float, float], width: int):
-        self.lo = int(band[0] * width)
-        self.hi = int(band[1] * width)
-        self.default = (self.lo + self.hi) / 2
-        self.prev: np.ndarray | None = None
+    def __init__(self, plan: MPlan, plate: np.ndarray, props: dict[str, np.ndarray],
+                 scenery: dict[str, np.ndarray] | None = None, medians: dict[str, np.ndarray] | None = None,
+                 depth: list[str] | None = None, dilate: int = 2, soften: float = 1.0, reach: float = 12):
+        import cv2
 
-    def update(self, left: np.ndarray, right: np.ndarray, ref: np.ndarray,
-               w_left: float, w_right: float, props_left: np.ndarray | None = None,
-               props_right: np.ndarray | None = None, prop_weight: float = 8.0) -> np.ndarray:
-        """Seam x per analysis row (analysis-resolution columns)."""
-        sl = slice(self.lo, self.hi)
-        fg_l = np.maximum(np.abs(left[:, sl] - ref[:, sl]).sum(-1) - 40, 0)
-        fg_r = np.maximum(np.abs(right[:, sl] - ref[:, sl]).sum(-1) - 40, 0)
-        if props_left is not None:
-            fg_l = fg_l * (1 + prop_weight * props_left[:, sl] / max(w_left, 1))
-        if props_right is not None:
-            fg_r = fg_r * (1 + prop_weight * props_right[:, sl] / max(w_right, 1))
-        diff = np.maximum(np.abs(left[:, sl] - right[:, sl]).sum(-1) - 30, 0)
-        # Seam at column x: left take shows [0, x), right take shows [x, W).
-        hide_r = np.concatenate([np.zeros((fg_r.shape[0], 1)), np.cumsum(fg_r, axis=1)], axis=1)[:, :-1]
-        cl = np.cumsum(fg_l, axis=1)
-        hide_l = cl[:, -1:] - np.concatenate([np.zeros((fg_l.shape[0], 1)), cl], axis=1)[:, :-1]
-        cost = w_right * hide_r + w_left * hide_l + 2.0 * diff
-        cost = cost / 255.0
-        W = cost.shape[1]
-        cost += 0.002 * np.abs(np.arange(W) + self.lo - self.default)[None, :]
-        prev = None if self.prev is None else self.prev - self.lo
-        path = _row_seam(cost.astype(np.float32), prev, lam_t=0.08) + self.lo
-        if self.prev is not None:
-            path = 0.6 * path + 0.4 * self.prev  # temporal smoothing
-        self.prev = path.astype(np.float32)
-        return self.prev
+        self.cv2 = cv2
+        self.plan = plan
+        self.plate = plate
+        self.props = props
+        self.scenery = scenery or {}
+        h, w = plate.shape[:2]
+        self.h, self.w = h, w
+        names = [c.name for c in plan.chars]
+        self.names = names
+        # Zones: where each character can possibly be (from the seam bands).
+        xs = np.arange(w) / w
+        self.zone = {}
+        for i, c in enumerate(plan.chars):
+            lo = plan.bands[i - 1][0] if i > 0 else 0.0
+            hi = plan.bands[i][1] if i < len(names) - 1 else 1.0
+            self.zone[c.name] = np.broadcast_to(((xs >= lo) & (xs <= hi))[None, :], (h, w))
+        # Background owner: each boundary between neighbours runs top to bottom along
+        # the path where the two takes' backgrounds look most alike (so it goes around
+        # anything that changed between takes, like a moved blanket, instead of
+        # through it), near halfway between them.
+        centers = [c.center for c in plan.chars]
+        cut_cols = []
+        for i in range(len(names) - 1):
+            mid = (centers[i] + centers[i + 1]) / 2
+            lo, hi = int((mid - 0.12) * w), int((mid + 0.12) * w)
+            if medians:
+                cost = np.abs(medians[names[i]][:, lo:hi] - medians[names[i + 1]][:, lo:hi]).sum(-1) / 255
+            else:
+                cost = np.zeros((h, hi - lo), np.float32)
+            cost += 0.01 * np.abs(np.arange(hi - lo) + lo - mid * w)[None, :] / w * 100
+            cut_cols.append(_row_path(cost.astype(np.float32)) + lo)
+        self.base = np.zeros((h, w), np.int32)
+        cols = np.arange(w)[None, :]
+        for i, path in enumerate(cut_cols):
+            self.base[cols >= path[:, None]] = i + 1
+        # Background (and each take's props) come only from the take that owns that part
+        # of the room - so props never pop in and out between cuts.
+        self.base_soft = [cv2.GaussianBlur((self.base == i).astype(np.float32), (0, 0), 2)
+                          for i in range(len(names))]
+        # Default depth: the middle character at the back, the outer ones in front.
+        self.depth = depth or sorted(names, key=lambda n: -abs(plan.char(n).center - 0.5))[::-1]
+        self.kd = np.ones((2 * dilate + 1, 2 * dilate + 1), np.uint8)
+        self.soften = soften
+        self.reach = reach
+        self.prev: dict[str, np.ndarray] = {}
 
+    def reset(self) -> None:
+        self.prev = {}
 
-def _ramp(seam_rows: np.ndarray, W: int, H: int, feather: float) -> np.ndarray:
-    """(H, W, 1) alpha: 0 left of the seam, 1 right of it, linear over `feather` px."""
-    ys = np.linspace(0, len(seam_rows) - 1, H)
-    xs = np.interp(ys, np.arange(len(seam_rows)), seam_rows) * _DS
-    k = 41
-    xs = np.convolve(np.pad(xs, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
-    x = np.arange(W, dtype=np.float32)[None, :]
-    a = np.clip((x - xs[:, None]) / feather + 0.5, 0, 1)
-    return a[..., None].astype(np.float32)
+    def alphas(self, small: dict[str, np.ndarray]) -> tuple[dict[str, np.ndarray], dict]:
+        cv2 = self.cv2
+        body = {}
+        for n in self.names:
+            # Props and scenery changes stay put for the whole take; they aren't
+            # anyone's body (otherwise hole-filling glues them onto the person).
+            exclude = self.props[n] | self.scenery.get(n, False)
+            b = _person_mask(small[n], self.plate, self.zone[n] & ~exclude)
+            body[n] = b
+        # People on top of the background, in depth order (later = in front).
+        person = np.full((self.h, self.w), -1, np.int32)
+        strong = {n: np.abs(small[n] - self.plate).sum(-1) > 45 for n in self.names}
+        masks = {}
+        for n in self.depth:
+            m = body[n].copy()
+            if n in self.prev:
+                m |= self.prev[n] & cv2.dilate(m.astype(np.uint8), self.kd).astype(bool)  # steadier edges
+            self.prev[n] = body[n]
+            masks[n] = m
+            person[m] = self.names.index(n)
+        # Where outlines overlap, a take that really shows something there (or whose
+        # person surely covers it: deep inside their outline) beats one whose outline
+        # merely got smoothed over plain room; between two real claims, front wins.
+        core_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        for n in self.depth:
+            core = cv2.erode(masks[n].astype(np.uint8), core_k).astype(bool)  # deep inside: surely them
+            person[masks[n] & (strong[n] | core)] = self.names.index(n)
+        # Around each person, anything that looks like plain empty room in their take
+        # (soft edges, hair, a sleeve the same colour as the couch) comes from their own
+        # take - the one take guaranteed to have those edge pixels right. Further out,
+        # the fixed background owner takes over, so scenery never shifts around.
+        # If two takes compete for such a pixel, the one where something faint is
+        # actually there (differs more from the empty room) wins; if both look exactly
+        # like the room, the nearer person wins.
+        free = person < 0
+        best = np.full((self.h, self.w), -np.inf, np.float32)
+        near = np.full((self.h, self.w), -1, np.int32)
+        for i, n in enumerate(self.names):
+            if not body[n].any():
+                continue
+            dist = cv2.distanceTransform((~body[n]).astype(np.uint8), cv2.DIST_L2, 3)
+            diff = np.abs(small[n] - self.plate).sum(-1)
+            score = np.where(diff > 15, diff, 0) - dist * 0.5
+            ok = free & (diff < 45) & (dist < self.reach) & (score > best)
+            best[ok] = score[ok]
+            near[ok] = i
+        person[near >= 0] = near[near >= 0]
+        anyone = cv2.GaussianBlur((person >= 0).astype(np.float32), (0, 0), self.soften)
+        al = {}
+        for i, n in enumerate(self.names):
+            p = cv2.GaussianBlur((person == i).astype(np.float32), (0, 0), self.soften)
+            al[n] = p + (1 - anyone) * self.base_soft[i]
+        tot = sum(al.values())
+        al = {n: a / np.maximum(tot, 1e-6) for n, a in al.items()}
+        # Self-check: person pixels that end up partly see-through, and how much of
+        # each person is covered by someone else.
+        stats = {}
+        for i, n in enumerate(self.names):
+            b = body[n]
+            if not b.any():
+                stats[n] = (0, 0.0)
+                continue
+            others = np.zeros_like(b)
+            for m in self.names:
+                if m != n:
+                    others |= body[m]
+            # The few pixels right at an edge where one person passes in front of
+            # another are anti-aliasing, not see-through; only count the rest.
+            near_other = cv2.dilate(others.astype(np.uint8), np.ones((7, 7), np.uint8)).astype(bool)
+            ghost = b & (al[n] > 0.15) & (al[n] < 0.85) & ~near_other
+            covered = (b & (al[n] < 0.5)).sum() / b.sum()
+            stats[n] = (int(ghost.sum()), float(covered))
+        return al, stats
 
 
 # ---------------------------------------------------------------- rendering
@@ -333,8 +546,9 @@ class _Reader:
 
 
 def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int = 1080, height: int = 1920,
-                 feather: float = 40, zoom: float = 1.6, label_y: float = 0.39, label_size: int = 52,
-                 speaker_weight: float = 3.0, crf: int = 20, preset: str = "medium",
+                 zoom: float = 1.6, label_y: float = 0.39, label_size: int = 52,
+                 depth: list[str] | None = None, crf: int = 20, preset: str = "medium",
+                 report_path: str | Path | None = None,
                  on_progress: Callable[[float], None] | None = None) -> Path:
     raw, output = Path(raw), Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -342,9 +556,14 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
     names = [c.name for c in plan.chars]
     gains = {n: np.array(plan.gains.get(n, [1, 1, 1]), np.float32) for n in names}
     total = sum(s.duration for s in plan.segments)
-    plate, props = background_plate(raw, plan.chars, plan.gains)
-    if plate.shape[:2] != (H // _DS, W // _DS):
-        raise ValueError(f"render size must be {plate.shape[1] * _DS}x{plate.shape[0] * _DS} for seam analysis")
+    import cv2
+
+    plate, props, scenery, medians, light = background_plate(raw, plan.chars, plan.gains, (W // _DS, H // _DS),
+                                                             plan.counter_y)
+    comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth)
+    # full-resolution lighting correction per take (global gain x smooth local field)
+    light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
+    report: list[dict] = []
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -376,7 +595,7 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 x0 = int(min(max(spk.center * W - zw / 2, 0), W - zw))
                 y0 = int(min(max(H * 0.2 - zh / 2, 0), H - zh))
                 for _ in range(n):
-                    f = r.read().astype(np.float32) * gains[spk.name]
+                    f = r.read().astype(np.float32) * light_full[spk.name]
                     crop = np.clip(f[y0:y0 + zh, x0:x0 + zw], 0, 255).astype(np.uint8)
                     from PIL import Image
 
@@ -392,18 +611,18 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                     else:
                         st, rate = seg.listen[c.name]
                         readers[c.name] = _Reader(raw, st, n, W, H, rate)
-                trackers = [SeamTracker(tuple(b), W // _DS) for b in plan.bands]
-                for _ in range(n):
-                    fr = {k: np.clip(r.read().astype(np.float32) * gains[k], 0, 255) for k, r in readers.items()}
+                comp.reset()
+                for fi in range(n):
+                    fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
-                    out = fr[names[0]]
-                    for i, tr in enumerate(trackers):
-                        left, right = names[i], names[i + 1]
-                        wl = speaker_weight if left == seg.char else 1.0
-                        wr = speaker_weight if right == seg.char else 1.0
-                        seam = tr.update(small[left], small[right], plate, wl, wr, props[left], props[right])
-                        a = _ramp(seam, W, H, feather)
-                        out = out + a * (fr[right] - out)
+                    al, st = comp.alphas(small)
+                    out = np.zeros_like(fr[names[0]])
+                    for k in names:
+                        a = cv2.resize(al[k], (W, H), interpolation=cv2.INTER_LINEAR)[..., None]
+                        out += a * fr[k]
+                    report.append({"t": round(done / FPS, 2), "line": seg.line, "speaker": seg.char,
+                                   **{f"ghost_{k}": v[0] for k, v in st.items()},
+                                   **{f"covered_{k}": round(v[1], 3) for k, v in st.items()}})
                     for c in plan.chars:
                         if c.name in labels:
                             lab = labels[c.name]
@@ -440,6 +659,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                "-progress", "pipe:1", "-nostats", str(output)]
         _run_ffmpeg(cmd, total, None)
+    if report_path:
+        Path(report_path).write_text(json.dumps(report))
     if on_progress:
         on_progress(1.0)
     return output
