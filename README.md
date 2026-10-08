@@ -76,6 +76,39 @@ command again; it reuses your edited words instead of re-transcribing.
 
 Captions use Montserrat ExtraBold (bundled, SIL Open Font License, see `broll_editor/fonts/OFL.txt`).
 
+## Split-screen dialogue (one person, two characters)
+
+Film one locked-off shot: first half you play one character on one side of the
+frame, second half you play the other character on the other side. Give it the
+script and it builds the "talking to yourself" split screen:
+
+```bash
+python -m broll_editor.splitscreen raw.mp4 script.txt -o output/final.mp4 \
+    --transcript words.json --plan plan.json
+```
+
+`script.txt`, one line of dialogue per line:
+
+```
+Toilet Brush: I'm the toilet brush.
+Lysol: That's disgusting.
+[zoom] Toilet Brush: I live in a puddle of my own water.
+```
+
+What it does automatically:
+
+- finds where the raw clip switches halves and which side you started on (from where the motion is),
+- puts the mask seam in the gap between your two positions, with a soft edge so it's invisible,
+- transcribes the clip (Whisper) and finds each script line in its speaker's half; if you said a line more than once, the last take wins,
+- plays the lines back to back in script order: the speaker's side plays the line, the other side plays your "listening" footage from the other take,
+- `[zoom]` lines punch in full-frame on the speaker.
+
+Useful options: `--switch 41.5`, `--first-side left`, `--seam 0.5` override the
+auto-detection; `--pad-before` / `--pad-after` control how tight the cuts are;
+`--left-label "Detailed|Car" --right-label "Clean|Car"` add name tags. Lines it
+couldn't find are listed at the end. `plan.json` holds every cut; edit it and
+re-run the same command to tweak timing without re-transcribing.
+
 ## Use from Python
 
 ```python

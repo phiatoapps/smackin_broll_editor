@@ -1,5 +1,6 @@
-"""Smackin B-roll Editor: stack a talking-head clip on top of a b-roll clip."""
+"""Smackin B-roll Editor: stacked talking-head/b-roll and split-screen dialogue edits."""
 
+from .splitscreen import SplitOptions, make_split_screen
 from .stacker import StackOptions, probe, stack_videos
 
-__all__ = ["StackOptions", "probe", "stack_videos"]
+__all__ = ["SplitOptions", "StackOptions", "make_split_screen", "probe", "stack_videos"]
