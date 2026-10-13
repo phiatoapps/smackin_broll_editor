@@ -53,6 +53,16 @@ def fetch(source: str, dest_dir: str | Path, name: str) -> Path:
 
         out = gdown.download(id=file_id, output=str(dest_dir) + "/", quiet=True)
         if not out:
+            # gdown sometimes trips on big files' virus-scan page; the direct endpoint doesn't.
+            path = dest_dir / f"{name}.mp4"
+            try:
+                urllib.request.urlretrieve(
+                    f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t", path
+                )
+                if path.stat().st_size > 1_000_000 or not path.read_bytes()[:100].lstrip().startswith(b"<"):
+                    return path
+            except OSError:
+                pass
             raise RuntimeError(
                 "Couldn't download from Google Drive. Make sure the file is shared as "
                 "'Anyone with the link can view'."

@@ -76,6 +76,23 @@ command again; it reuses your edited words instead of re-transcribing.
 
 Captions use Montserrat ExtraBold (bundled, SIL Open Font License, see `broll_editor/fonts/OFL.txt`).
 
+## B-roll montage (many clips cut to the script)
+
+For a real ad you usually want several b-roll shots cut to what's being said.
+Write an edit list (see `examples/putter_edit.json`): each shot says when it
+starts on the talking head (`at`), which clip and second to pull from, where
+to crop (`focus_y` 0 = top of the clip, 1 = bottom), its slow zoom
+(`zoom: [from, to]`), and whether to hit the cut with a white `flash`.
+
+```bash
+python -m broll_editor.montage examples/putter_edit.json -o output/final.mp4
+python -m broll_editor.montage examples/putter_edit.json --broll-only -o output/broll.mp4  # just the bottom track
+```
+
+`options` in the edit list takes any setting from the table above
+(`divider_px`, `captions`, `top_focus_y`, ...). Every shot gets a push-in or
+pull-out plus a color punch, so reused footage never looks identical.
+
 ## Use from Python
 
 ```python
