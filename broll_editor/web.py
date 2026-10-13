@@ -37,7 +37,7 @@ def _float(form, key: str, default: float) -> float:
 def _options_from_form(form) -> StackOptions:
     max_dur = form.get("max_duration", "").strip()
     return StackOptions(
-        split=_float(form, "split", 50) / 100,
+        split=_float(form, "split", 40) / 100,
         top_fit=form.get("top_fit", "cover"),
         bottom_fit=form.get("bottom_fit", "cover"),
         top_focus_x=_float(form, "top_focus_x", 50) / 100,

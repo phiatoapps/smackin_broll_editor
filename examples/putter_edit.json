@@ -1,7 +1,7 @@
 {
  "talking_head": "Talkinghead.mp4",
  "broll_dir": "../clips",
- "options": {
+ "options": {"split": 0.5, 
   "top_focus_y": 0.12,
   "divider_px": 8,
   "captions": true,

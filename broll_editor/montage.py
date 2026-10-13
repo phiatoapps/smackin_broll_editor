@@ -44,6 +44,8 @@ class Shot:
     focus_y: float = 0.5
     zoom: list[float] = field(default_factory=lambda: [1.0, 1.15])
     flash: bool = False
+    # Playback speed: 0.5 = half-speed slow motion (smoothest from 60/120fps footage).
+    speed: float = 1.0
     saturation: float = 1.15
     contrast: float = 1.05
 
@@ -55,6 +57,7 @@ def _shot_filter(shot: Shot, w: int, h: int, fps: int) -> str:
     # working oversampled keeps slow zooms smooth.
     ow, oh = w * 2, h * 2
     chain = [
+        f"setpts=(PTS-STARTPTS)/{shot.speed}",
         f"fps={fps}",
         f"scale={ow}:{oh}:force_original_aspect_ratio=increase",
         f"crop={ow}:{oh}:(iw-{ow})*{shot.focus_x}:(ih-{oh})*{shot.focus_y}",
@@ -72,7 +75,7 @@ def _shot_filter(shot: Shot, w: int, h: int, fps: int) -> str:
 def render_shot(shot: Shot, out: Path, w: int, h: int, fps: int) -> Path:
     cmd = [
         "ffmpeg", "-y", "-v", "error",
-        "-ss", f"{shot.start:.3f}", "-t", f"{shot.duration + 0.1:.3f}", "-i", str(shot.source),
+        "-ss", f"{shot.start:.3f}", "-t", f"{shot.duration * shot.speed + 0.1:.3f}", "-i", str(shot.source),
         "-vf", _shot_filter(shot, w, h, fps),
         "-frames:v", str(max(1, round(shot.duration * fps))),
         "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "14", "-pix_fmt", "yuv420p",
@@ -108,15 +111,18 @@ def build_shots(raw: list[dict], total: float) -> list[Shot]:
             continue
         src_len = probe(s["source"]).duration
         start = s.get("start", 0.0)
-        if start + duration > src_len:
+        speed = s.get("speed", 1.0)
+        if speed <= 0:
+            raise ValueError(f"Shot at {s['at']}s has a non-positive speed")
+        if start + duration * speed > src_len:
             raise ValueError(
-                f"Shot at {s['at']}s needs {duration:.1f}s of {Path(s['source']).name} from "
+                f"Shot at {s['at']}s needs {duration * speed:.1f}s of {Path(s['source']).name} from "
                 f"{start}s, but the clip is only {src_len:.1f}s long"
             )
         shots.append(Shot(
             source=Path(s["source"]), start=start, duration=duration,
             focus_x=s.get("focus_x", 0.5), focus_y=s.get("focus_y", 0.5),
-            zoom=s.get("zoom", DEFAULT_ZOOMS[i % 2]), flash=s.get("flash", False),
+            zoom=s.get("zoom", DEFAULT_ZOOMS[i % 2]), flash=s.get("flash", False), speed=speed,
             saturation=s.get("saturation", 1.15), contrast=s.get("contrast", 1.05),
         ))
     return shots

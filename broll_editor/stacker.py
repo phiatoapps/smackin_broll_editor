@@ -34,7 +34,7 @@ class StackOptions:
     height: int = 1920
     fps: int = 30
     # Fraction of the frame height given to the top (talking head) panel.
-    split: float = 0.5
+    split: float = 0.4
 
     top_fit: str = "cover"
     bottom_fit: str = "cover"

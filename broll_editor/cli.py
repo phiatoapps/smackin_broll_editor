@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-o", "--output", default="output/stacked.mp4")
     p.add_argument("--size", default="1080x1920", help="output WIDTHxHEIGHT (default 1080x1920)")
     p.add_argument("--fps", type=int, default=30)
-    p.add_argument("--split", type=float, default=0.5, help="fraction of height for the top clip (default 0.5)")
+    p.add_argument("--split", type=float, default=0.4, help="fraction of height for the top clip (default 0.4 = 40% talking head, 60% b-roll)")
     p.add_argument("--top-fit", choices=FIT_MODES, default="cover")
     p.add_argument("--bottom-fit", choices=FIT_MODES, default="cover")
     p.add_argument("--top-focus", default="0.5,0.5", metavar="X,Y", help="crop focus 0-1 for the top clip")

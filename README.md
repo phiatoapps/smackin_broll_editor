@@ -47,7 +47,7 @@ Useful options:
 
 | Option | What it does | Default |
 | --- | --- | --- |
-| `--split 0.45` | Fraction of the height the talking head gets | `0.5` |
+| `--split 0.5` | Fraction of the height the talking head gets | `0.4` (40% talking head, 60% b-roll) |
 | `--top-focus X,Y` / `--bottom-focus X,Y` | Where to crop from, 0–1 (e.g. `0.5,0.3` keeps a face near the top) | `0.5,0.5` |
 | `--top-fit blur` / `--bottom-fit blur` | Show the whole clip over a blurred background instead of cropping | `cover` |
 | `--top-start` / `--bottom-start` | Seconds to skip at the start of each clip | `0` |
@@ -82,7 +82,8 @@ For a real ad you usually want several b-roll shots cut to what's being said.
 Write an edit list (see `examples/putter_edit.json`): each shot says when it
 starts on the talking head (`at`), which clip and second to pull from, where
 to crop (`focus_y` 0 = top of the clip, 1 = bottom), its slow zoom
-(`zoom: [from, to]`), and whether to hit the cut with a white `flash`.
+(`zoom: [from, to]`), optional slow motion (`speed`: 0.5 = half speed, best
+with 60/120fps footage), and whether to hit the cut with a white `flash`.
 
 ```bash
 python -m broll_editor.montage examples/putter_edit.json -o output/final.mp4

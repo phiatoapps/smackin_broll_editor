@@ -1,0 +1,153 @@
+{
+ "talking_head": "Talkinghead.mp4",
+ "broll_dir": "../clips/sodastream",
+ "options": {
+  "split": 0.4,
+  "top_focus_y": 0.12,
+  "divider_px": 8,
+  "captions": true,
+  "transcript": "sodastream_words.json"
+ },
+ "shots": [
+  {
+   "at": 0.0,
+   "source": "IMG_5423.MOV",
+   "start": 2.0,
+   "focus_y": 0.25,
+   "zoom": [
+    1.0,
+    1.25
+   ]
+  },
+  {
+   "at": 2.6,
+   "source": "IMG_5421.MOV",
+   "start": 12.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 4.4,
+   "source": "IMG_5422.MOV",
+   "start": 22.0,
+   "focus_y": 0.6,
+   "speed": 0.4,
+   "flash": true
+  },
+  {
+   "at": 6.3,
+   "source": "IMG_5422.MOV",
+   "start": 3.0,
+   "focus_y": 0.25
+  },
+  {
+   "at": 8.2,
+   "source": "IMG_5421.MOV",
+   "start": 44.0,
+   "focus_y": 0.85
+  },
+  {
+   "at": 11.3,
+   "source": "IMG_5421.MOV",
+   "start": 53.2,
+   "focus_y": 0.0
+  },
+  {
+   "at": 12.1,
+   "source": "IMG_5421.MOV",
+   "start": 32.2,
+   "focus_y": 0.25
+  },
+  {
+   "at": 12.8,
+   "source": "IMG_5421.MOV",
+   "start": 56.0,
+   "focus_y": 0.0
+  },
+  {
+   "at": 14.3,
+   "source": "IMG_5421.MOV",
+   "start": 49.0,
+   "focus_y": 0.25,
+   "flash": true
+  },
+  {
+   "at": 15.5,
+   "source": "IMG_5422.MOV",
+   "start": 24.0,
+   "focus_y": 0.6,
+   "speed": 0.4
+  },
+  {
+   "at": 17.2,
+   "source": "IMG_5423.MOV",
+   "start": 14.5,
+   "focus_y": 0.5
+  },
+  {
+   "at": 18.5,
+   "source": "IMG_5422.MOV",
+   "start": 35.0,
+   "focus_y": 0.75,
+   "speed": 0.5
+  },
+  {
+   "at": 20.4,
+   "source": "IMG_5421.MOV",
+   "start": 1.0,
+   "focus_y": 0.4
+  },
+  {
+   "at": 22.9,
+   "source": "IMG_5421.MOV",
+   "start": 14.3,
+   "focus_y": 0.5
+  },
+  {
+   "at": 24.1,
+   "source": "IMG_5421.MOV",
+   "start": 17.0,
+   "focus_y": 0.4
+  },
+  {
+   "at": 26.2,
+   "source": "IMG_5421.MOV",
+   "start": 32.0,
+   "focus_y": 0.3,
+   "zoom": [
+    1.35,
+    1.55
+   ]
+  },
+  {
+   "at": 28.7,
+   "source": "IMG_5423.MOV",
+   "start": 22.0,
+   "focus_y": 0.5,
+   "flash": true
+  },
+  {
+   "at": 30.5,
+   "source": "IMG_5422.MOV",
+   "start": 33.6,
+   "focus_y": 0.6,
+   "speed": 0.5
+  },
+  {
+   "at": 32.0,
+   "source": "IMG_5421.MOV",
+   "start": 59.5,
+   "focus_y": 0.5
+  },
+  {
+   "at": 34.4,
+   "source": "IMG_5423.MOV",
+   "start": 3.0,
+   "focus_y": 0.25,
+   "zoom": [
+    1.2,
+    1.0
+   ],
+   "flash": true
+  }
+ ]
+}
