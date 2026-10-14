@@ -120,6 +120,11 @@ is "someone" in each take, the speaker wins where two people overlap, and props
 from Python with an `MPlan` (characters with their take ranges, left to right,
 plus the chosen takes); see the module docstring.
 
+Jump-zoom "camera" edits (hard cuts between wide / medium / tight-on-speaker at
+line changes, each held a few seconds) keep attention: call `auto_framing(plan)`
+or set them per line with `set_framing(plan, ["tight", "wide", ...])` before
+rendering. Labels keep their size and follow their person through the zooms.
+
 ## Use from Python
 
 ```python

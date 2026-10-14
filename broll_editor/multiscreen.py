@@ -47,6 +47,7 @@ class Character:
     hi: float
     center: float      # where they stand, fraction of frame width (for labels / zoom)
     label: str = ""
+    face_y: float = 0.32  # face height, fraction of frame height (for tight framings)
 
 
 @dataclass
@@ -68,6 +69,9 @@ class MSegment:
     listen: dict[str, list[float]] = field(default_factory=dict)  # name -> [start, rate]
     zoom: bool = False
     text: str = ""
+    # "Camera" framing applied to the finished composite: [zoom, center_x, center_y]
+    # (fractions of the frame). None = full frame.
+    framing: list[float] | None = None
 
 
 @dataclass
@@ -181,6 +185,69 @@ def schedule_multi(takes: list[MTake], words: list[Word], chars: list[Character]
         cursor[t.char] = t.end
         plan.segments.append(MSegment(t.line, t.char, round(t.start, 3), round(dur, 3), listen, t.zoom, t.text))
     return plan
+
+
+# ---------------------------------------------------------------- framing
+
+
+def auto_framing(plan: MPlan, hold: tuple[float, ...] = (5.0, 3.5, 6.0, 4.0), medium: float = 1.22,
+                 tight: float = 1.45, skip_zoom: bool = True) -> None:
+    """Jump-zoom "camera" edits to keep attention, like the reference edits.
+
+    Hard cuts between framings, only at line changes, each held for a few seconds
+    (cycling through `hold`): wide (everyone), tight on whoever is talking, medium
+    on the speaker with their neighbour(s) still in frame. Never the same framing
+    twice in a row. Lines flagged `zoom` keep their own speaker-only punch-in.
+    """
+    order = ["wide", "tight", "medium", "tight", "wide", "medium"]
+    k = 0
+    style = order[0]
+    since = 0.0
+    hk = 0
+    for i, seg in enumerate(plan.segments):
+        if seg.zoom and skip_zoom:
+            seg.framing = None
+            since = 1e9  # the punch-in was itself a cut: change framing after it
+            continue
+        if i > 0 and since >= hold[hk % len(hold)]:
+            k += 1
+            hk += 1
+            style = order[k % len(order)]
+            since = 0.0
+        spk = plan.char(seg.char)
+        if style == "wide":
+            seg.framing = None
+        elif style == "tight":
+            seg.framing = [tight, spk.center, spk.face_y + 0.06]
+        else:
+            # speaker plus whoever stands closest to them
+            others = sorted((c for c in plan.chars if c.name != seg.char), key=lambda c: abs(c.center - spk.center))
+            cx = (spk.center * 2 + others[0].center) / 3
+            seg.framing = [medium, cx, spk.face_y + 0.12]
+        since += seg.duration
+
+
+def set_framing(plan: MPlan, styles: list[str | None], medium: float = 1.22, tight: float = 1.4) -> None:
+    """Explicit per-segment framing: "wide", "medium" or "tight" (on that line's speaker)."""
+    for seg, style in zip(plan.segments, styles):
+        spk = plan.char(seg.char)
+        if style == "tight":
+            seg.framing = [tight, spk.center, spk.face_y + 0.06]
+        elif style == "medium":
+            others = sorted((c for c in plan.chars if c.name != seg.char), key=lambda c: abs(c.center - spk.center))
+            seg.framing = [medium, (spk.center * 2 + others[0].center) / 3, spk.face_y + 0.12]
+        else:
+            seg.framing = None
+
+
+def _frame_crop(framing: list[float] | None, W: int, H: int) -> tuple[float, int, int, int, int]:
+    if not framing or framing[0] <= 1.0:
+        return 1.0, 0, 0, W, H
+    z, cx, cy = framing
+    cw, ch = int(round(W / z)), int(round(H / z))
+    x0 = int(min(max(cx * W - cw / 2, 0), W - cw))
+    y0 = int(min(max(cy * H - ch / 2, 0), H - ch))
+    return W / cw, x0, y0, cw, ch
 
 
 # ---------------------------------------------------------------- colour
@@ -623,13 +690,21 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                     report.append({"t": round(done / FPS, 2), "line": seg.line, "speaker": seg.char,
                                    **{f"ghost_{k}": v[0] for k, v in st.items()},
                                    **{f"covered_{k}": round(v[1], 3) for k, v in st.items()}})
+                    # camera framing: crop the composite and scale back up (labels stay
+                    # the same size and follow the people they belong to)
+                    z, fx0, fy0, cw, ch = _frame_crop(seg.framing, W, H)
+                    if z != 1.0:
+                        out = cv2.resize(out[fy0:fy0 + ch, fx0:fx0 + cw], (W, H), interpolation=cv2.INTER_CUBIC)
                     for c in plan.chars:
                         if c.name in labels:
                             lab = labels[c.name]
                             lh, lw = lab.shape[:2]
-                            x0 = int(c.center * W - lw / 2)
-                            y0 = int(label_y * H - lh / 2)
-                            x0 = min(max(x0, 0), W - lw)
+                            cx = (c.center * W - fx0) * z
+                            cy = (label_y * H - fy0) * z
+                            if not (0.04 * W < cx < 0.96 * W and lh < cy < H - lh):
+                                continue  # their spot is out of frame in this framing
+                            x0 = int(min(max(cx - lw / 2, 0), W - lw))
+                            y0 = int(cy - lh / 2)
                             al = lab[..., 3:4] / 255
                             out[y0:y0 + lh, x0:x0 + lw] = out[y0:y0 + lh, x0:x0 + lw] * (1 - al) + lab[..., :3] * al
                     enc.stdin.write(np.clip(out, 0, 255).astype(np.uint8).tobytes())
