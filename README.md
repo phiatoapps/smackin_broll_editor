@@ -131,6 +131,13 @@ a pause become back-to-back pieces: the speaker jump-cuts, listeners keep
 playing continuously. Clicks/breaths are dropped; a short word stays attached to
 its line instead of becoming a flicker-length cut.
 
+### Quality check (every video)
+
+After rendering, run `python tools/qc.py final.mp4 report.json` and grade every
+shot out of 10 from the sheet it writes. Anything under 8 (half-cut faces, a
+neighbour's shoulder filling the frame, ghosting, dead air, frozen or black
+frames) gets fixed and re-rendered before delivery.
+
 ## Use from Python
 
 ```python

@@ -289,16 +289,7 @@ def auto_framing(plan: MPlan, hold: tuple[float, ...] = (3.0, 2.5, 3.5, 2.5), me
             hk += 1
             style = order[k % len(order)]
             since = 0.0
-        spk = plan.char(seg.char)
-        if style == "wide":
-            seg.framing = None
-        elif style == "tight":
-            seg.framing = [tight, spk.center, spk.face_y + 0.06]
-        else:
-            # speaker plus whoever stands closest to them
-            others = sorted((c for c in plan.chars if c.name != seg.char), key=lambda c: abs(c.center - spk.center))
-            cx = (spk.center * 2 + others[0].center) / 3
-            seg.framing = [medium, cx, spk.face_y + 0.12]
+        seg.framing = _style_framing(plan, seg, style, medium, tight)
         since += seg.duration
 
 
@@ -315,15 +306,27 @@ def set_framing(plan: MPlan, styles: list[str | None], medium: float = 1.22, tig
     """Explicit per-segment framing: "wide", "medium" or "tight" (on that line's speaker).
     The opening line is always wide with a quick pull-out, whatever `styles` says."""
     for seg, style in zip(plan.segments, styles):
-        spk = plan.char(seg.char)
-        if style == "tight":
-            seg.framing = [tight, spk.center, spk.face_y + 0.06]
-        elif style == "medium":
-            others = sorted((c for c in plan.chars if c.name != seg.char), key=lambda c: abs(c.center - spk.center))
-            seg.framing = [medium, (spk.center * 2 + others[0].center) / 3, spk.face_y + 0.12]
-        else:
-            seg.framing = None
+        seg.framing = _style_framing(plan, seg, style, medium, tight)
     open_wide(plan)
+
+
+def _style_framing(plan: MPlan, seg: MSegment, style: str | None, medium: float, tight: float
+                   ) -> list[float] | None:
+    """Framing for a style, avoiding half-cut neighbours (graded as bad frames):
+    with two people, medium keeps both fully in frame and tight pushes in far enough
+    that the other person mostly drops out of frame."""
+    spk = plan.char(seg.char)
+    others = sorted((c for c in plan.chars if c.name != seg.char), key=lambda c: abs(c.center - spk.center))
+    if style == "tight":
+        z = tight
+        if len(plan.chars) == 2:
+            z = max(tight, 1.6)
+        return [z, spk.center, spk.face_y + 0.06]
+    if style == "medium":
+        if len(plan.chars) == 2:
+            return [min(medium, 1.12), 0.5, spk.face_y + 0.14]
+        return [medium, (spk.center * 2 + others[0].center) / 3, spk.face_y + 0.12]
+    return None
 
 
 def _frame_crop(framing: list[float] | None, W: int, H: int) -> tuple[float, int, int, int, int]:
