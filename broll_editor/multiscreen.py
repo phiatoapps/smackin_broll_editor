@@ -72,6 +72,9 @@ class MSegment:
     # "Camera" framing applied to the finished composite: [zoom, center_x, center_y]
     # (fractions of the frame). None = full frame.
     framing: list[float] | None = None
+    # Animated pull-out at the start of the line: [start_zoom, seconds]. Used on the
+    # opening line so the hook lands on everyone in frame.
+    pull_out: list[float] | None = None
 
 
 @dataclass
@@ -204,7 +207,11 @@ def auto_framing(plan: MPlan, hold: tuple[float, ...] = (5.0, 3.5, 6.0, 4.0), me
     style = order[0]
     since = 0.0
     hk = 0
+    open_wide(plan)
     for i, seg in enumerate(plan.segments):
+        if i == 0:
+            since += seg.duration  # the opening is always wide (see open_wide)
+            continue
         if seg.zoom and skip_zoom:
             seg.framing = None
             since = 1e9  # the punch-in was itself a cut: change framing after it
@@ -227,8 +234,18 @@ def auto_framing(plan: MPlan, hold: tuple[float, ...] = (5.0, 3.5, 6.0, 4.0), me
         since += seg.duration
 
 
+def open_wide(plan: MPlan, start_zoom: float = 1.15, seconds: float = 0.4) -> None:
+    """The hook: the video opens on everyone in frame, via a quick pull-out."""
+    if plan.segments:
+        first = plan.segments[0]
+        first.zoom = False
+        first.framing = None
+        first.pull_out = [start_zoom, seconds]
+
+
 def set_framing(plan: MPlan, styles: list[str | None], medium: float = 1.22, tight: float = 1.4) -> None:
-    """Explicit per-segment framing: "wide", "medium" or "tight" (on that line's speaker)."""
+    """Explicit per-segment framing: "wide", "medium" or "tight" (on that line's speaker).
+    The opening line is always wide with a quick pull-out, whatever `styles` says."""
     for seg, style in zip(plan.segments, styles):
         spk = plan.char(seg.char)
         if style == "tight":
@@ -238,6 +255,7 @@ def set_framing(plan: MPlan, styles: list[str | None], medium: float = 1.22, tig
             seg.framing = [medium, (spk.center * 2 + others[0].center) / 3, spk.face_y + 0.12]
         else:
             seg.framing = None
+    open_wide(plan)
 
 
 def _frame_crop(framing: list[float] | None, W: int, H: int) -> tuple[float, int, int, int, int]:
@@ -692,7 +710,12 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                                    **{f"covered_{k}": round(v[1], 3) for k, v in st.items()}})
                     # camera framing: crop the composite and scale back up (labels stay
                     # the same size and follow the people they belong to)
-                    z, fx0, fy0, cw, ch = _frame_crop(seg.framing, W, H)
+                    framing = seg.framing
+                    if seg.pull_out and fi < seg.pull_out[1] * FPS:
+                        u = fi / (seg.pull_out[1] * FPS)
+                        u = 1 - (1 - u) ** 3  # ease out: fast start, settles on the wide shot
+                        framing = [seg.pull_out[0] + (1 - seg.pull_out[0]) * u, 0.5, 0.42]
+                    z, fx0, fy0, cw, ch = _frame_crop(framing, W, H)
                     if z != 1.0:
                         out = cv2.resize(out[fy0:fy0 + ch, fx0:fx0 + cw], (W, H), interpolation=cv2.INTER_CUBIC)
                     for c in plan.chars:
