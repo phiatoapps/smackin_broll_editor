@@ -257,11 +257,12 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
 # ---------------------------------------------------------------- framing
 
 
-def auto_framing(plan: MPlan, hold: tuple[float, ...] = (5.0, 3.5, 6.0, 4.0), medium: float = 1.22,
-                 tight: float = 1.45, skip_zoom: bool = True) -> None:
+def auto_framing(plan: MPlan, hold: tuple[float, ...] = (3.0, 2.5, 3.5, 2.5), medium: float = 1.22,
+                 tight: float = 1.45, skip_zoom: bool = True, min_hold: float = 1.2) -> None:
     """Jump-zoom "camera" edits to keep attention, like the reference edits.
 
-    Hard cuts between framings, only at line changes, each held for a few seconds
+    Run after tighten(). Hard cuts between framings at line changes or at the jump
+    cuts tighten() made inside a line (hiding them), each held for a few seconds
     (cycling through `hold`): wide (everyone), tight on whoever is talking, medium
     on the speaker with their neighbour(s) still in frame. Never the same framing
     twice in a row. Lines flagged `zoom` keep their own speaker-only punch-in.
@@ -280,7 +281,10 @@ def auto_framing(plan: MPlan, hold: tuple[float, ...] = (5.0, 3.5, 6.0, 4.0), me
             seg.framing = None
             since = 1e9  # the punch-in was itself a cut: change framing after it
             continue
-        if i > 0 and since >= hold[hk % len(hold)]:
+        # Change framing once the hold is up - or early at a jump cut inside a line
+        # (a new framing hides the jump), as long as the framing has had a moment.
+        jump = i > 0 and plan.segments[i - 1].line == seg.line and plan.segments[i - 1].char == seg.char
+        if i > 0 and (since >= hold[hk % len(hold)] or (jump and since >= min_hold)):
             k += 1
             hk += 1
             style = order[k % len(order)]
@@ -442,13 +446,14 @@ def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, l
         med = medians[c.name]
         valid = (np.abs(xs - c.center) > reach)[None, :] & (np.abs(med - plate).sum(-1) < 90)
         valid &= (med.mean(-1) > 15)
-        wv = cv2.GaussianBlur(valid.astype(np.float32), (0, 0), 25) + 1e-4
+        wv = cv2.GaussianBlur(valid.astype(np.float32), (0, 0), 60) + 1e-4
         g = np.ones((h, w, 3), np.float32)
         for k in range(3):
             ratio = np.where(valid, plate[..., k] / np.maximum(med[..., k], 1), 0).astype(np.float32)
-            g[..., k] = cv2.GaussianBlur(ratio, (0, 0), 25) / wv
-        g[wv < 0.02] = 1.0
-        light[c.name] = np.clip(g, 0.6, 1.6)
+            g[..., k] = cv2.GaussianBlur(ratio, (0, 0), 60) / wv
+        # fade to no correction where little bare room was seen, and keep it gentle
+        g = 1 + (g - 1) * np.clip(wv / 0.3, 0, 1)[..., None]
+        light[c.name] = np.clip(g, 0.88, 1.12)
         takes[c.name] = takes[c.name] * light[c.name]
         medians[c.name] = med * light[c.name]
     props, scenery = {}, {}
