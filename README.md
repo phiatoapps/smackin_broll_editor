@@ -125,6 +125,12 @@ line changes, each held a few seconds) keep attention: call `auto_framing(plan)`
 or set them per line with `set_framing(plan, ["tight", "wide", ...])` before
 rendering. Labels keep their size and follow their person through the zooms.
 
+No dead air: `tighten(plan, audio_envelope(raw))` cuts every silence in the
+speaker's audio (between lines and inside them) down to under ~0.1s. Lines with
+a pause become back-to-back pieces: the speaker jump-cuts, listeners keep
+playing continuously. Clicks/breaths are dropped; a short word stays attached to
+its line instead of becoming a flicker-length cut.
+
 ## Use from Python
 
 ```python

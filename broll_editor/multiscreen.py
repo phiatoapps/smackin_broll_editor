@@ -190,6 +190,70 @@ def schedule_multi(takes: list[MTake], words: list[Word], chars: list[Character]
     return plan
 
 
+def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float = 0.035, edge: float = 0.03,
+            thr: float | None = None, hop: float = 0.01, min_sound: float = 0.08, min_piece: float = 0.3) -> dict:
+    """Cut dead air: every silence in the speaker's audio longer than `max_gap` is cut
+    down to `keep` on each side, including at the start/end of each line (trimmed to
+    `edge`). A line with a pause in it becomes several pieces back to back - the
+    speaker jump-cuts, while everyone listening keeps playing continuously.
+    """
+    if thr is None:
+        thr = max(0.008, float(np.percentile(env, 20)) * 3)
+    loud = env > thr
+    # bridge tiny dips inside words (plosives, s-sounds)
+    k = int(round(0.05 / hop))
+    loud = np.convolve(loud.astype(np.float32), np.ones(k), mode="same") > 0
+    new, removed = [], 0.0
+    for seg in plan.segments:
+        a, b = int(round(seg.start / hop)), int(round((seg.start + seg.duration) / hop))
+        m = loud[a:b]
+        if not m.any():
+            new.append(seg)
+            continue
+        # speech runs, merged across gaps <= max_gap
+        runs, i = [], 0
+        while i < len(m):
+            if m[i]:
+                j = i
+                while j < len(m) and m[j]:
+                    j += 1
+                if runs and (i - runs[-1][1]) * hop <= max_gap:
+                    runs[-1][1] = j
+                else:
+                    runs.append([i, j])
+                i = j
+            else:
+                i += 1
+        # drop clicks/breaths (too short to be a word); keep a short word with its
+        # neighbour rather than making a flicker-length jump cut
+        runs = [r for r in runs if (r[1] - r[0]) * hop >= min_sound] or runs
+        merged = []
+        for r in runs:
+            if merged and ((merged[-1][1] - merged[-1][0]) * hop < min_piece or (r[1] - r[0]) * hop < min_piece):
+                merged[-1][1] = r[1]
+            else:
+                merged.append(list(r))
+        runs = merged
+        pieces = []
+        for idx, (i, j) in enumerate(runs):
+            lead = edge if idx == 0 else keep
+            tail = edge if idx == len(runs) - 1 else keep
+            ps = max(seg.start, seg.start + i * hop - lead)
+            pe = min(seg.start + seg.duration, seg.start + j * hop + tail)
+            pieces.append((ps, pe))
+        out_t = 0.0
+        for idx, (ps, pe) in enumerate(pieces):
+            d = pe - ps
+            listen = {n: [round(st + out_t * rate, 3), rate] for n, (st, rate) in seg.listen.items()}
+            new.append(MSegment(seg.line, seg.char, round(ps, 3), round(d, 3), listen, seg.zoom, seg.text,
+                                seg.framing, seg.pull_out if idx == 0 else None))
+            out_t += d
+        removed += seg.duration - out_t
+    before = sum(s.duration for s in plan.segments)
+    plan.segments = new
+    return {"before": round(before, 2), "after": round(before - removed, 2), "removed": round(removed, 2)}
+
+
 # ---------------------------------------------------------------- framing
 
 
