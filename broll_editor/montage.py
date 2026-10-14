@@ -13,7 +13,8 @@ An edit list (JSON) says which shot plays when:
     }
 
 Each shot runs from its "at" (seconds on the talking head) until the next
-shot's "at"; the last runs to the end. Every shot gets a slow push-in or
+shot's "at"; the last runs to the end. A shot with a "pair" ({"source", "start",
+...}) shows two clips side by side, e.g. two slow-motion pours as a hook. Every shot gets a slow push-in or
 pull-out ("zoom": [from, to]) so reused footage never looks identical, and an
 optional white "flash" on the cut to punch up a beat.
 """
@@ -48,6 +49,9 @@ class Shot:
     speed: float = 1.0
     saturation: float = 1.15
     contrast: float = 1.05
+    # Optional second clip shown side by side (this shot on the left, `pair` on
+    # the right). Its duration, zoom, flash and color come from this shot.
+    pair: Shot | None = None
 
 
 def _shot_filter(shot: Shot, w: int, h: int, fps: int) -> str:
@@ -67,16 +71,34 @@ def _shot_filter(shot: Shot, w: int, h: int, fps: int) -> str:
         f"eq=saturation={shot.saturation}:contrast={shot.contrast}",
         "setsar=1",
     ]
-    if shot.flash:
-        chain.append(f"fade=t=in:st=0:d=0.2:color=white")
     return ",".join(chain)
 
 
+FLASH = "fade=t=in:st=0:d=0.2:color=white"
+
+
 def render_shot(shot: Shot, out: Path, w: int, h: int, fps: int) -> Path:
+    def input_args(clip: Shot) -> list[str]:
+        return ["-ss", f"{clip.start:.3f}", "-t", f"{shot.duration * clip.speed + 0.1:.3f}", "-i", str(clip.source)]
+
+    if shot.pair is None:
+        inputs = input_args(shot)
+        graph = ["-vf", _shot_filter(shot, w, h, fps) + (f",{FLASH}" if shot.flash else "")]
+    else:
+        # Split screen: each clip fills half the panel width, with a thin seam between.
+        left_w = w // 4 * 2
+        right_w = w - left_w
+        pair = shot.pair
+        pair.duration, pair.zoom = shot.duration, shot.zoom
+        pair.saturation, pair.contrast = shot.saturation, shot.contrast
+        inputs = input_args(shot) + input_args(pair)
+        tail = f",drawbox=x={left_w - 3}:y=0:w=6:h=ih:color=white:t=fill" + (f",{FLASH}" if shot.flash else "")
+        graph = ["-filter_complex",
+                 f"[0:v]{_shot_filter(shot, left_w, h, fps)}[l];"
+                 f"[1:v]{_shot_filter(pair, right_w, h, fps)}[r];"
+                 f"[l][r]hstack=inputs=2{tail}"]
     cmd = [
-        "ffmpeg", "-y", "-v", "error",
-        "-ss", f"{shot.start:.3f}", "-t", f"{shot.duration * shot.speed + 0.1:.3f}", "-i", str(shot.source),
-        "-vf", _shot_filter(shot, w, h, fps),
+        "ffmpeg", "-y", "-v", "error", *inputs, *graph,
         "-frames:v", str(max(1, round(shot.duration * fps))),
         "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "14", "-pix_fmt", "yuv420p",
         str(out),
@@ -97,8 +119,10 @@ def load_edit(path: str | Path) -> tuple[Path, list[dict], dict]:
         head = broll_dir / head
     shots = sorted(edit["shots"], key=lambda s: s["at"])
     for s in shots:
-        src = Path(s["source"])
-        s["source"] = src if src.is_absolute() else broll_dir / src
+        for clip in (s, s.get("pair")):
+            if clip:
+                src = Path(clip["source"])
+                clip["source"] = src if src.is_absolute() else broll_dir / src
     return head, shots, edit.get("options", {})
 
 
@@ -109,23 +133,29 @@ def build_shots(raw: list[dict], total: float) -> list[Shot]:
         duration = end - s["at"]
         if duration <= 0:
             continue
-        src_len = probe(s["source"]).duration
-        start = s.get("start", 0.0)
-        speed = s.get("speed", 1.0)
-        if speed <= 0:
-            raise ValueError(f"Shot at {s['at']}s has a non-positive speed")
-        if start + duration * speed > src_len:
-            raise ValueError(
-                f"Shot at {s['at']}s needs {duration * speed:.1f}s of {Path(s['source']).name} from "
-                f"{start}s, but the clip is only {src_len:.1f}s long"
-            )
-        shots.append(Shot(
-            source=Path(s["source"]), start=start, duration=duration,
-            focus_x=s.get("focus_x", 0.5), focus_y=s.get("focus_y", 0.5),
-            zoom=s.get("zoom", DEFAULT_ZOOMS[i % 2]), flash=s.get("flash", False), speed=speed,
-            saturation=s.get("saturation", 1.15), contrast=s.get("contrast", 1.05),
-        ))
+        shot = _clip(s, s["at"], duration)
+        shot.zoom = s.get("zoom", DEFAULT_ZOOMS[i % 2])
+        shot.flash = s.get("flash", False)
+        shot.saturation, shot.contrast = s.get("saturation", 1.15), s.get("contrast", 1.05)
+        if s.get("pair"):
+            shot.pair = _clip(s["pair"], s["at"], duration)
+        shots.append(shot)
     return shots
+
+
+def _clip(c: dict, at: float, duration: float) -> Shot:
+    """One source clip of a shot, checked against the clip's length."""
+    start, speed = c.get("start", 0.0), c.get("speed", 1.0)
+    if speed <= 0:
+        raise ValueError(f"Shot at {at}s has a non-positive speed")
+    src_len = probe(c["source"]).duration
+    if start + duration * speed > src_len:
+        raise ValueError(
+            f"Shot at {at}s needs {duration * speed:.1f}s of {Path(c['source']).name} from "
+            f"{start}s, but the clip is only {src_len:.1f}s long"
+        )
+    return Shot(source=Path(c["source"]), start=start, duration=duration, speed=speed,
+                focus_x=c.get("focus_x", 0.5), focus_y=c.get("focus_y", 0.5))
 
 
 def render_montage(shots: list[Shot], out: Path, w: int, h: int, fps: int, workers: int = 3) -> Path:

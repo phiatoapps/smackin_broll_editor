@@ -1,0 +1,527 @@
+[
+ {
+  "text": "So,",
+  "start": 0.0,
+  "end": 0.26
+ },
+ {
+  "text": "a",
+  "start": 0.34,
+  "end": 0.44
+ },
+ {
+  "text": "sunflower",
+  "start": 0.44,
+  "end": 0.88
+ },
+ {
+  "text": "seed",
+  "start": 0.88,
+  "end": 1.14
+ },
+ {
+  "text": "company,",
+  "start": 1.14,
+  "end": 1.52
+ },
+ {
+  "text": "seeds,",
+  "start": 1.8,
+  "end": 2.04
+ },
+ {
+  "text": "that's",
+  "start": 2.38,
+  "end": 2.56
+ },
+ {
+  "text": "all",
+  "start": 2.56,
+  "end": 2.68
+ },
+ {
+  "text": "they",
+  "start": 2.68,
+  "end": 2.82
+ },
+ {
+  "text": "ever",
+  "start": 2.82,
+  "end": 2.94
+ },
+ {
+  "text": "sold,",
+  "start": 2.94,
+  "end": 3.24
+ },
+ {
+  "text": "put",
+  "start": 3.42,
+  "end": 3.52
+ },
+ {
+  "text": "their",
+  "start": 3.52,
+  "end": 3.68
+ },
+ {
+  "text": "cinnamon",
+  "start": 3.68,
+  "end": 4.12
+ },
+ {
+  "text": "churro",
+  "start": 4.12,
+  "end": 4.58
+ },
+ {
+  "text": "flavor",
+  "start": 4.58,
+  "end": 4.9
+ },
+ {
+  "text": "on",
+  "start": 4.9,
+  "end": 5.3
+ },
+ {
+  "text": "a",
+  "start": 5.3,
+  "end": 5.58
+ },
+ {
+  "text": "cashew.",
+  "start": 5.58,
+  "end": 6.4
+ },
+ {
+  "text": "Honey",
+  "start": 6.5,
+  "end": 6.7
+ },
+ {
+  "text": "roasted",
+  "start": 6.7,
+  "end": 7.04
+ },
+ {
+  "text": "cinnamon",
+  "start": 7.04,
+  "end": 7.5
+ },
+ {
+  "text": "churro",
+  "start": 7.5,
+  "end": 7.82
+ },
+ {
+  "text": "on",
+  "start": 7.82,
+  "end": 7.9
+ },
+ {
+  "text": "the",
+  "start": 7.9,
+  "end": 7.98
+ },
+ {
+  "text": "outside.",
+  "start": 7.98,
+  "end": 8.26
+ },
+ {
+  "text": "It",
+  "start": 8.52,
+  "end": 8.64
+ },
+ {
+  "text": "tastes",
+  "start": 8.64,
+  "end": 8.88
+ },
+ {
+  "text": "like",
+  "start": 8.88,
+  "end": 9.04
+ },
+ {
+  "text": "dessert",
+  "start": 9.04,
+  "end": 9.4
+ },
+ {
+  "text": "and",
+  "start": 9.4,
+  "end": 9.72
+ },
+ {
+  "text": "it's",
+  "start": 9.72,
+  "end": 10.08
+ },
+ {
+  "text": "still",
+  "start": 10.08,
+  "end": 10.38
+ },
+ {
+  "text": "a",
+  "start": 10.38,
+  "end": 10.68
+ },
+ {
+  "text": "cashew,",
+  "start": 10.68,
+  "end": 11.18
+ },
+ {
+  "text": "which",
+  "start": 11.24,
+  "end": 11.36
+ },
+ {
+  "text": "means",
+  "start": 11.36,
+  "end": 11.5
+ },
+ {
+  "text": "you're",
+  "start": 11.5,
+  "end": 11.7
+ },
+ {
+  "text": "getting",
+  "start": 11.7,
+  "end": 11.88
+ },
+ {
+  "text": "four",
+  "start": 11.88,
+  "end": 12.34
+ },
+ {
+  "text": "grams",
+  "start": 12.34,
+  "end": 12.56
+ },
+ {
+  "text": "of",
+  "start": 12.56,
+  "end": 12.72
+ },
+ {
+  "text": "protein",
+  "start": 12.72,
+  "end": 13.04
+ },
+ {
+  "text": "in",
+  "start": 13.04,
+  "end": 13.4
+ },
+ {
+  "text": "that",
+  "start": 13.4,
+  "end": 13.56
+ },
+ {
+  "text": "bag.",
+  "start": 13.56,
+  "end": 13.86
+ },
+ {
+  "text": "I'm",
+  "start": 14.3,
+  "end": 14.46
+ },
+ {
+  "text": "not",
+  "start": 14.46,
+  "end": 14.56
+ },
+ {
+  "text": "going",
+  "start": 14.56,
+  "end": 14.7
+ },
+ {
+  "text": "to",
+  "start": 14.7,
+  "end": 14.72
+ },
+ {
+  "text": "pretend",
+  "start": 14.72,
+  "end": 15.0
+ },
+ {
+  "text": "and",
+  "start": 15.0,
+  "end": 15.16
+ },
+ {
+  "text": "act",
+  "start": 15.16,
+  "end": 15.36
+ },
+ {
+  "text": "like",
+  "start": 15.36,
+  "end": 15.52
+ },
+ {
+  "text": "that's",
+  "start": 15.52,
+  "end": 15.96
+ },
+ {
+  "text": "why",
+  "start": 15.96,
+  "end": 16.12
+ },
+ {
+  "text": "I",
+  "start": 16.12,
+  "end": 16.28
+ },
+ {
+  "text": "got",
+  "start": 16.28,
+  "end": 16.48
+ },
+ {
+  "text": "them,",
+  "start": 16.48,
+  "end": 16.7
+ },
+ {
+  "text": "but",
+  "start": 16.84,
+  "end": 16.92
+ },
+ {
+  "text": "it's",
+  "start": 16.92,
+  "end": 17.1
+ },
+ {
+  "text": "still",
+  "start": 17.1,
+  "end": 17.24
+ },
+ {
+  "text": "there.",
+  "start": 17.24,
+  "end": 17.5
+ },
+ {
+  "text": "Zip",
+  "start": 17.62,
+  "end": 17.82
+ },
+ {
+  "text": "shut",
+  "start": 17.82,
+  "end": 18.02
+ },
+ {
+  "text": "so",
+  "start": 18.02,
+  "end": 18.2
+ },
+ {
+  "text": "it's",
+  "start": 18.2,
+  "end": 18.34
+ },
+ {
+  "text": "resealable",
+  "start": 18.34,
+  "end": 18.76
+ },
+ {
+  "text": "so",
+  "start": 18.76,
+  "end": 18.88
+ },
+ {
+  "text": "you",
+  "start": 18.88,
+  "end": 19.02
+ },
+ {
+  "text": "don't",
+  "start": 19.02,
+  "end": 19.3
+ },
+ {
+  "text": "have",
+  "start": 19.3,
+  "end": 19.4
+ },
+ {
+  "text": "to",
+  "start": 19.4,
+  "end": 19.5
+ },
+ {
+  "text": "commit",
+  "start": 19.5,
+  "end": 19.64
+ },
+ {
+  "text": "to",
+  "start": 19.64,
+  "end": 19.8
+ },
+ {
+  "text": "eating",
+  "start": 19.8,
+  "end": 19.92
+ },
+ {
+  "text": "the",
+  "start": 19.92,
+  "end": 20.1
+ },
+ {
+  "text": "entire",
+  "start": 20.1,
+  "end": 20.46
+ },
+ {
+  "text": "bag.",
+  "start": 20.46,
+  "end": 20.98
+ },
+ {
+  "text": "They're",
+  "start": 21.2,
+  "end": 21.36
+ },
+ {
+  "text": "brand",
+  "start": 21.36,
+  "end": 21.68
+ },
+ {
+  "text": "new,",
+  "start": 21.68,
+  "end": 21.88
+ },
+ {
+  "text": "this",
+  "start": 21.96,
+  "end": 22.04
+ },
+ {
+  "text": "flavor",
+  "start": 22.04,
+  "end": 22.3
+ },
+ {
+  "text": "is",
+  "start": 22.3,
+  "end": 22.46
+ },
+ {
+  "text": "ridiculous,",
+  "start": 22.46,
+  "end": 22.86
+ },
+ {
+  "text": "but",
+  "start": 23.12,
+  "end": 23.2
+ },
+ {
+  "text": "they're",
+  "start": 23.2,
+  "end": 23.42
+ },
+ {
+  "text": "selling",
+  "start": 23.42,
+  "end": 23.62
+ },
+ {
+  "text": "out",
+  "start": 23.62,
+  "end": 23.8
+ },
+ {
+  "text": "quick,",
+  "start": 23.8,
+  "end": 24.02
+ },
+ {
+  "text": "so",
+  "start": 24.14,
+  "end": 24.22
+ },
+ {
+  "text": "if",
+  "start": 24.22,
+  "end": 24.34
+ },
+ {
+  "text": "you",
+  "start": 24.34,
+  "end": 24.46
+ },
+ {
+  "text": "want",
+  "start": 24.46,
+  "end": 24.62
+ },
+ {
+  "text": "to",
+  "start": 24.62,
+  "end": 24.68
+ },
+ {
+  "text": "grab",
+  "start": 24.68,
+  "end": 24.86
+ },
+ {
+  "text": "them,",
+  "start": 24.86,
+  "end": 25.08
+ },
+ {
+  "text": "I'd",
+  "start": 25.24,
+  "end": 25.32
+ },
+ {
+  "text": "click",
+  "start": 25.32,
+  "end": 25.5
+ },
+ {
+  "text": "the",
+  "start": 25.5,
+  "end": 25.66
+ },
+ {
+  "text": "link",
+  "start": 25.66,
+  "end": 25.74
+ },
+ {
+  "text": "in",
+  "start": 25.74,
+  "end": 25.82
+ },
+ {
+  "text": "this",
+  "start": 25.82,
+  "end": 25.98
+ },
+ {
+  "text": "video.",
+  "start": 25.98,
+  "end": 26.18
+ }
+]

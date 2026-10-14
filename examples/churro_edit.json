@@ -1,0 +1,114 @@
+{
+ "talking_head": "Talkinghead.mp4",
+ "broll_dir": "../clips/Churro",
+ "options": {
+  "split": 0.4,
+  "top_focus_y": 0.12,
+  "divider_px": 8,
+  "captions": true,
+  "transcript": "churro_words.json"
+ },
+ "shots": [
+  {
+   "at": 0.0,
+   "source": "Slomo.MOV",
+   "start": 30.5,
+   "focus_y": 0.75,
+   "zoom": [
+    1.0,
+    1.12
+   ]
+  },
+  {
+   "at": 3.4,
+   "source": "IMG_5486.MOV",
+   "start": 3.5,
+   "focus_y": 0.4
+  },
+  {
+   "at": 5.3,
+   "source": "IMG_5486.MOV",
+   "start": 25.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 6.5,
+   "source": "Slomo.MOV",
+   "start": 36.0,
+   "focus_y": 0.8,
+   "zoom": [
+    1.4,
+    1.6
+   ]
+  },
+  {
+   "at": 8.5,
+   "source": "IMG_5486.MOV",
+   "start": 31.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 9.7,
+   "source": "IMG_5486.MOV",
+   "start": 22.0,
+   "focus_y": 0.4
+  },
+  {
+   "at": 11.2,
+   "source": "IMG_5486.MOV",
+   "start": 6.0,
+   "focus_y": 0.0,
+   "zoom": [
+    1.2,
+    1.4
+   ],
+   "flash": true
+  },
+  {
+   "at": 14.3,
+   "source": "Slomo.MOV",
+   "start": 8.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 17.6,
+   "source": "IMG_5486.MOV",
+   "start": 13.0,
+   "focus_y": 0.25
+  },
+  {
+   "at": 19.5,
+   "source": "IMG_5486.MOV",
+   "start": 27.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 21.2,
+   "source": "Slomo.MOV",
+   "start": 39.0,
+   "focus_y": 0.5,
+   "flash": true
+  },
+  {
+   "at": 23.1,
+   "source": "IMG_5486.MOV",
+   "start": 9.5,
+   "focus_y": 0.4,
+   "zoom": [
+    1.0,
+    1.2
+   ]
+  },
+  {
+   "at": 24.7,
+   "source": "Slomo.MOV",
+   "start": 34.0,
+   "focus_y": 0.75,
+   "zoom": [
+    1.25,
+    1.05
+   ],
+   "flash": true
+  }
+ ]
+}

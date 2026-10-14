@@ -1,0 +1,522 @@
+[
+ {
+  "text": "A",
+  "start": 0.0,
+  "end": 0.08
+ },
+ {
+  "text": "sunflower",
+  "start": 0.08,
+  "end": 0.48
+ },
+ {
+  "text": "seed",
+  "start": 0.48,
+  "end": 0.72
+ },
+ {
+  "text": "just",
+  "start": 0.72,
+  "end": 0.92
+ },
+ {
+  "text": "made",
+  "start": 0.92,
+  "end": 1.06
+ },
+ {
+  "text": "cashews,",
+  "start": 1.06,
+  "end": 1.52
+ },
+ {
+  "text": "and",
+  "start": 1.7,
+  "end": 1.7
+ },
+ {
+  "text": "I",
+  "start": 1.7,
+  "end": 1.88
+ },
+ {
+  "text": "don't",
+  "start": 1.88,
+  "end": 2.06
+ },
+ {
+  "text": "think",
+  "start": 2.06,
+  "end": 2.18
+ },
+ {
+  "text": "people",
+  "start": 2.18,
+  "end": 2.4
+ },
+ {
+  "text": "understand",
+  "start": 2.4,
+  "end": 2.76
+ },
+ {
+  "text": "what",
+  "start": 2.76,
+  "end": 2.94
+ },
+ {
+  "text": "that",
+  "start": 2.94,
+  "end": 3.06
+ },
+ {
+  "text": "means.",
+  "start": 3.06,
+  "end": 3.3
+ },
+ {
+  "text": "Smackin'",
+  "start": 3.6,
+  "end": 3.96
+ },
+ {
+  "text": "has",
+  "start": 3.96,
+  "end": 4.2
+ },
+ {
+  "text": "only",
+  "start": 4.2,
+  "end": 4.38
+ },
+ {
+  "text": "ever",
+  "start": 4.38,
+  "end": 4.6
+ },
+ {
+  "text": "done",
+  "start": 4.6,
+  "end": 4.8
+ },
+ {
+  "text": "seeds,",
+  "start": 4.8,
+  "end": 5.04
+ },
+ {
+  "text": "and",
+  "start": 5.16,
+  "end": 5.22
+ },
+ {
+  "text": "if",
+  "start": 5.22,
+  "end": 5.38
+ },
+ {
+  "text": "you've",
+  "start": 5.38,
+  "end": 5.56
+ },
+ {
+  "text": "had",
+  "start": 5.56,
+  "end": 5.86
+ },
+ {
+  "text": "the",
+  "start": 5.86,
+  "end": 5.88
+ },
+ {
+  "text": "backyard",
+  "start": 5.88,
+  "end": 6.06
+ },
+ {
+  "text": "barbecue",
+  "start": 6.06,
+  "end": 6.48
+ },
+ {
+  "text": "seeds,",
+  "start": 6.48,
+  "end": 6.76
+ },
+ {
+  "text": "you",
+  "start": 6.88,
+  "end": 6.94
+ },
+ {
+  "text": "already",
+  "start": 6.94,
+  "end": 7.08
+ },
+ {
+  "text": "know",
+  "start": 7.08,
+  "end": 7.24
+ },
+ {
+  "text": "this",
+  "start": 7.24,
+  "end": 7.38
+ },
+ {
+  "text": "flavor.",
+  "start": 7.38,
+  "end": 7.62
+ },
+ {
+  "text": "Honey",
+  "start": 7.8,
+  "end": 7.94
+ },
+ {
+  "text": "roasted,",
+  "start": 7.94,
+  "end": 8.24
+ },
+ {
+  "text": "heavy",
+  "start": 8.44,
+  "end": 8.6
+ },
+ {
+  "text": "on",
+  "start": 8.6,
+  "end": 8.76
+ },
+ {
+  "text": "the",
+  "start": 8.76,
+  "end": 8.86
+ },
+ {
+  "text": "seasoning,",
+  "start": 8.86,
+  "end": 9.1
+ },
+ {
+  "text": "actually",
+  "start": 9.34,
+  "end": 9.7
+ },
+ {
+  "text": "bold,",
+  "start": 9.7,
+  "end": 10.24
+ },
+ {
+  "text": "except",
+  "start": 10.36,
+  "end": 10.56
+ },
+ {
+  "text": "now",
+  "start": 10.56,
+  "end": 10.86
+ },
+ {
+  "text": "I'm",
+  "start": 10.86,
+  "end": 11.14
+ },
+ {
+  "text": "not",
+  "start": 11.14,
+  "end": 11.26
+ },
+ {
+  "text": "working",
+  "start": 11.26,
+  "end": 11.5
+ },
+ {
+  "text": "for",
+  "start": 11.5,
+  "end": 11.74
+ },
+ {
+  "text": "it.",
+  "start": 11.74,
+  "end": 11.88
+ },
+ {
+  "text": "No",
+  "start": 11.96,
+  "end": 12.1
+ },
+ {
+  "text": "shells,",
+  "start": 12.1,
+  "end": 12.4
+ },
+ {
+  "text": "no",
+  "start": 12.64,
+  "end": 12.76
+ },
+ {
+  "text": "spitting,",
+  "start": 12.76,
+  "end": 13.12
+ },
+ {
+  "text": "no",
+  "start": 13.28,
+  "end": 13.4
+ },
+ {
+  "text": "tongue",
+  "start": 13.4,
+  "end": 13.7
+ },
+ {
+  "text": "feeling",
+  "start": 13.7,
+  "end": 13.92
+ },
+ {
+  "text": "like",
+  "start": 13.92,
+  "end": 14.16
+ },
+ {
+  "text": "sandpaper",
+  "start": 14.16,
+  "end": 14.7
+ },
+ {
+  "text": "just",
+  "start": 14.7,
+  "end": 14.96
+ },
+ {
+  "text": "hit",
+  "start": 14.96,
+  "end": 15.14
+ },
+ {
+  "text": "it,",
+  "start": 15.14,
+  "end": 15.28
+ },
+ {
+  "text": "plus",
+  "start": 15.38,
+  "end": 15.54
+ },
+ {
+  "text": "they",
+  "start": 15.54,
+  "end": 15.72
+ },
+ {
+  "text": "come",
+  "start": 15.72,
+  "end": 15.86
+ },
+ {
+  "text": "in",
+  "start": 15.86,
+  "end": 15.94
+ },
+ {
+  "text": "resealable",
+  "start": 15.94,
+  "end": 16.58
+ },
+ {
+  "text": "4-ounce",
+  "start": 16.58,
+  "end": 17.04
+ },
+ {
+  "text": "bags.",
+  "start": 17.04,
+  "end": 17.4
+ },
+ {
+  "text": "Now",
+  "start": 17.62,
+  "end": 17.7
+ },
+ {
+  "text": "this",
+  "start": 17.7,
+  "end": 17.88
+ },
+ {
+  "text": "is",
+  "start": 17.88,
+  "end": 17.98
+ },
+ {
+  "text": "their",
+  "start": 17.98,
+  "end": 18.12
+ },
+ {
+  "text": "brand",
+  "start": 18.12,
+  "end": 18.34
+ },
+ {
+  "text": "new",
+  "start": 18.34,
+  "end": 18.5
+ },
+ {
+  "text": "drop,",
+  "start": 18.5,
+  "end": 18.7
+ },
+ {
+  "text": "and",
+  "start": 18.84,
+  "end": 18.94
+ },
+ {
+  "text": "when",
+  "start": 18.94,
+  "end": 19.12
+ },
+ {
+  "text": "they",
+  "start": 19.12,
+  "end": 19.26
+ },
+ {
+  "text": "do",
+  "start": 19.26,
+  "end": 19.38
+ },
+ {
+  "text": "brand",
+  "start": 19.38,
+  "end": 19.56
+ },
+ {
+  "text": "new",
+  "start": 19.56,
+  "end": 19.68
+ },
+ {
+  "text": "drops,",
+  "start": 19.68,
+  "end": 19.92
+ },
+ {
+  "text": "they",
+  "start": 20.02,
+  "end": 20.1
+ },
+ {
+  "text": "sell",
+  "start": 20.1,
+  "end": 20.32
+ },
+ {
+  "text": "out",
+  "start": 20.32,
+  "end": 20.48
+ },
+ {
+  "text": "quick.",
+  "start": 20.48,
+  "end": 20.76
+ },
+ {
+  "text": "So",
+  "start": 20.98,
+  "end": 21.04
+ },
+ {
+  "text": "if",
+  "start": 21.04,
+  "end": 21.16
+ },
+ {
+  "text": "you",
+  "start": 21.16,
+  "end": 21.22
+ },
+ {
+  "text": "still",
+  "start": 21.22,
+  "end": 21.34
+ },
+ {
+  "text": "see",
+  "start": 21.34,
+  "end": 21.5
+ },
+ {
+  "text": "the",
+  "start": 21.5,
+  "end": 21.6
+ },
+ {
+  "text": "link",
+  "start": 21.6,
+  "end": 21.74
+ },
+ {
+  "text": "in",
+  "start": 21.74,
+  "end": 21.84
+ },
+ {
+  "text": "this",
+  "start": 21.84,
+  "end": 21.96
+ },
+ {
+  "text": "video,",
+  "start": 21.96,
+  "end": 22.22
+ },
+ {
+  "text": "I'd",
+  "start": 22.44,
+  "end": 22.64
+ },
+ {
+  "text": "grab",
+  "start": 22.64,
+  "end": 22.76
+ },
+ {
+  "text": "your",
+  "start": 22.76,
+  "end": 22.94
+ },
+ {
+  "text": "Smackin'",
+  "start": 22.94,
+  "end": 23.36
+ },
+ {
+  "text": "cashews",
+  "start": 23.36,
+  "end": 23.76
+ },
+ {
+  "text": "before",
+  "start": 23.76,
+  "end": 24.0
+ },
+ {
+  "text": "they're",
+  "start": 24.0,
+  "end": 24.22
+ },
+ {
+  "text": "gone.",
+  "start": 24.22,
+  "end": 24.34
+ }
+]

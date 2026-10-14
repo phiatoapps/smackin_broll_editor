@@ -90,6 +90,9 @@ python -m broll_editor.montage examples/putter_edit.json -o output/final.mp4
 python -m broll_editor.montage examples/putter_edit.json --broll-only -o output/broll.mp4  # just the bottom track
 ```
 
+Add `"pair": {"source": ..., "start": ...}` to a shot to play two clips side
+by side (see `examples/duo_edit.json`, which opens on two slow-motion pours).
+
 `options` in the edit list takes any setting from the table above
 (`divider_px`, `captions`, `top_focus_y`, ...). Every shot gets a push-in or
 pull-out plus a color punch, so reused footage never looks identical.

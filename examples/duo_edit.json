@@ -1,0 +1,134 @@
+{
+ "talking_head": "TalkingHead.mp4",
+ "broll_dir": "../clips/Duo",
+ "options": {
+  "split": 0.4,
+  "top_focus_y": 0.12,
+  "divider_px": 8,
+  "captions": true,
+  "transcript": "duo_words.json"
+ },
+ "shots": [
+  {
+   "at": 0.0,
+   "source": "Slomo1.MOV",
+   "start": 17.0,
+   "focus_x": 0.7,
+   "focus_y": 0.5,
+   "pair": {
+    "source": "Slomo2.MOV",
+    "start": 30.5,
+    "focus_x": 0.7,
+    "focus_y": 0.5
+   },
+   "zoom": [
+    1.0,
+    1.1
+   ]
+  },
+  {
+   "at": 3.7,
+   "source": "IMG_5489.MOV",
+   "start": 40.0,
+   "focus_y": 0.6
+  },
+  {
+   "at": 4.8,
+   "source": "IMG_5489.MOV",
+   "start": 0.5,
+   "focus_y": 0.85
+  },
+  {
+   "at": 6.8,
+   "source": "IMG_5488.MOV",
+   "start": 38.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 8.2,
+   "source": "IMG_5489.MOV",
+   "start": 58.0,
+   "focus_y": 0.25
+  },
+  {
+   "at": 10.4,
+   "source": "IMG_5488.MOV",
+   "start": 52.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 11.2,
+   "source": "IMG_5489.MOV",
+   "start": 43.0,
+   "focus_y": 0.5,
+   "flash": true
+  },
+  {
+   "at": 14.5,
+   "source": "IMG_5489.MOV",
+   "start": 13.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 15.6,
+   "source": "IMG_5489.MOV",
+   "start": 18.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 16.5,
+   "source": "IMG_5489.MOV",
+   "start": 72.0,
+   "focus_y": 0.4
+  },
+  {
+   "at": 19.0,
+   "source": "IMG_5489.MOV",
+   "start": 15.5,
+   "focus_y": 0.5
+  },
+  {
+   "at": 19.8,
+   "source": "IMG_5488.MOV",
+   "start": 56.0,
+   "focus_y": 0.5
+  },
+  {
+   "at": 20.4,
+   "source": "IMG_5488.MOV",
+   "start": 18.0,
+   "focus_y": 0.1
+  },
+  {
+   "at": 22.6,
+   "source": "IMG_5488.MOV",
+   "start": 66.5,
+   "focus_y": 0.5
+  },
+  {
+   "at": 23.5,
+   "source": "IMG_5489.MOV",
+   "start": 80.5,
+   "focus_y": 0.5,
+   "flash": true
+  },
+  {
+   "at": 26.2,
+   "source": "Slomo1.MOV",
+   "start": 22.0,
+   "focus_x": 0.7,
+   "focus_y": 0.5,
+   "pair": {
+    "source": "Slomo2.MOV",
+    "start": 35.0,
+    "focus_x": 0.7,
+    "focus_y": 0.5
+   },
+   "zoom": [
+    1.15,
+    1.0
+   ],
+   "flash": true
+  }
+ ]
+}

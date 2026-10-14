@@ -1,0 +1,617 @@
+[
+ {
+  "text": "Here's",
+  "start": 0.0,
+  "end": 0.14
+ },
+ {
+  "text": "a",
+  "start": 0.14,
+  "end": 0.2
+ },
+ {
+  "text": "problem",
+  "start": 0.2,
+  "end": 0.4
+ },
+ {
+  "text": "with",
+  "start": 0.4,
+  "end": 0.54
+ },
+ {
+  "text": "a",
+  "start": 0.54,
+  "end": 0.6
+ },
+ {
+  "text": "brand",
+  "start": 0.6,
+  "end": 0.76
+ },
+ {
+  "text": "new",
+  "start": 0.76,
+  "end": 0.96
+ },
+ {
+  "text": "snack.",
+  "start": 0.96,
+  "end": 1.18
+ },
+ {
+  "text": "You",
+  "start": 1.42,
+  "end": 1.42
+ },
+ {
+  "text": "buy",
+  "start": 1.42,
+  "end": 1.58
+ },
+ {
+  "text": "six",
+  "start": 1.58,
+  "end": 2.06
+ },
+ {
+  "text": "bags",
+  "start": 2.06,
+  "end": 2.44
+ },
+ {
+  "text": "of",
+  "start": 2.44,
+  "end": 2.78
+ },
+ {
+  "text": "one",
+  "start": 2.78,
+  "end": 3.04
+ },
+ {
+  "text": "flavor,",
+  "start": 3.04,
+  "end": 3.44
+ },
+ {
+  "text": "you",
+  "start": 3.68,
+  "end": 3.82
+ },
+ {
+  "text": "better",
+  "start": 3.82,
+  "end": 4.06
+ },
+ {
+  "text": "have",
+  "start": 4.06,
+  "end": 4.22
+ },
+ {
+  "text": "guessed",
+  "start": 4.22,
+  "end": 4.4
+ },
+ {
+  "text": "right.",
+  "start": 4.4,
+  "end": 4.6
+ },
+ {
+  "text": "And",
+  "start": 4.76,
+  "end": 4.76
+ },
+ {
+  "text": "Smackin',",
+  "start": 4.76,
+  "end": 5.62
+ },
+ {
+  "text": "they've",
+  "start": 5.62,
+  "end": 5.76
+ },
+ {
+  "text": "only",
+  "start": 5.76,
+  "end": 5.86
+ },
+ {
+  "text": "made",
+  "start": 5.86,
+  "end": 6.02
+ },
+ {
+  "text": "sunflower",
+  "start": 6.02,
+  "end": 6.32
+ },
+ {
+  "text": "seeds.",
+  "start": 6.32,
+  "end": 6.72
+ },
+ {
+  "text": "These",
+  "start": 6.82,
+  "end": 7.04
+ },
+ {
+  "text": "cashews",
+  "start": 7.04,
+  "end": 7.42
+ },
+ {
+  "text": "just",
+  "start": 7.42,
+  "end": 7.72
+ },
+ {
+  "text": "came",
+  "start": 7.72,
+  "end": 7.9
+ },
+ {
+  "text": "out,",
+  "start": 7.9,
+  "end": 8.08
+ },
+ {
+  "text": "so",
+  "start": 8.16,
+  "end": 8.24
+ },
+ {
+  "text": "nobody",
+  "start": 8.24,
+  "end": 8.68
+ },
+ {
+  "text": "has",
+  "start": 8.68,
+  "end": 8.92
+ },
+ {
+  "text": "tried",
+  "start": 8.92,
+  "end": 9.12
+ },
+ {
+  "text": "them",
+  "start": 9.12,
+  "end": 9.32
+ },
+ {
+  "text": "yet",
+  "start": 9.32,
+  "end": 9.54
+ },
+ {
+  "text": "until",
+  "start": 9.54,
+  "end": 10.1
+ },
+ {
+  "text": "now.",
+  "start": 10.1,
+  "end": 10.38
+ },
+ {
+  "text": "That's",
+  "start": 10.44,
+  "end": 10.56
+ },
+ {
+  "text": "including",
+  "start": 10.56,
+  "end": 10.8
+ },
+ {
+  "text": "you.",
+  "start": 10.8,
+  "end": 11.06
+ },
+ {
+  "text": "But",
+  "start": 11.18,
+  "end": 11.26
+ },
+ {
+  "text": "in",
+  "start": 11.26,
+  "end": 11.36
+ },
+ {
+  "text": "this",
+  "start": 11.36,
+  "end": 11.58
+ },
+ {
+  "text": "bundle,",
+  "start": 11.58,
+  "end": 11.84
+ },
+ {
+  "text": "you",
+  "start": 12.06,
+  "end": 12.08
+ },
+ {
+  "text": "get",
+  "start": 12.08,
+  "end": 12.22
+ },
+ {
+  "text": "the",
+  "start": 12.22,
+  "end": 12.38
+ },
+ {
+  "text": "duo",
+  "start": 12.38,
+  "end": 12.66
+ },
+ {
+  "text": "of",
+  "start": 12.66,
+  "end": 12.92
+ },
+ {
+  "text": "their",
+  "start": 12.92,
+  "end": 13.08
+ },
+ {
+  "text": "two",
+  "start": 13.08,
+  "end": 13.38
+ },
+ {
+  "text": "signature",
+  "start": 13.38,
+  "end": 13.76
+ },
+ {
+  "text": "flavors.",
+  "start": 13.76,
+  "end": 14.26
+ },
+ {
+  "text": "That's",
+  "start": 14.48,
+  "end": 14.66
+ },
+ {
+  "text": "the",
+  "start": 14.66,
+  "end": 14.78
+ },
+ {
+  "text": "backyard",
+  "start": 14.78,
+  "end": 15.0
+ },
+ {
+  "text": "barbecue",
+  "start": 15.0,
+  "end": 15.46
+ },
+ {
+  "text": "and",
+  "start": 15.46,
+  "end": 15.8
+ },
+ {
+  "text": "cinnamon",
+  "start": 15.8,
+  "end": 16.12
+ },
+ {
+  "text": "churro.",
+  "start": 16.12,
+  "end": 16.52
+ },
+ {
+  "text": "They're",
+  "start": 16.54,
+  "end": 16.66
+ },
+ {
+  "text": "both",
+  "start": 16.66,
+  "end": 16.86
+ },
+ {
+  "text": "honey",
+  "start": 16.86,
+  "end": 17.08
+ },
+ {
+  "text": "roasted,",
+  "start": 17.08,
+  "end": 17.4
+ },
+ {
+  "text": "they're",
+  "start": 17.56,
+  "end": 17.68
+ },
+ {
+  "text": "both",
+  "start": 17.68,
+  "end": 17.88
+ },
+ {
+  "text": "absolutely",
+  "start": 17.88,
+  "end": 18.46
+ },
+ {
+  "text": "delicious.",
+  "start": 18.46,
+  "end": 18.82
+ },
+ {
+  "text": "One",
+  "start": 19.04,
+  "end": 19.2
+ },
+ {
+  "text": "savory",
+  "start": 19.2,
+  "end": 19.54
+ },
+ {
+  "text": "and",
+  "start": 19.54,
+  "end": 19.82
+ },
+ {
+  "text": "one",
+  "start": 19.82,
+  "end": 19.98
+ },
+ {
+  "text": "dessert,",
+  "start": 19.98,
+  "end": 20.26
+ },
+ {
+  "text": "so",
+  "start": 20.44,
+  "end": 20.5
+ },
+ {
+  "text": "you",
+  "start": 20.5,
+  "end": 20.56
+ },
+ {
+  "text": "have",
+  "start": 20.56,
+  "end": 20.7
+ },
+ {
+  "text": "one",
+  "start": 20.7,
+  "end": 20.86
+ },
+ {
+  "text": "in",
+  "start": 20.86,
+  "end": 20.98
+ },
+ {
+  "text": "the",
+  "start": 20.98,
+  "end": 20.98
+ },
+ {
+  "text": "afternoon",
+  "start": 20.98,
+  "end": 21.28
+ },
+ {
+  "text": "and",
+  "start": 21.28,
+  "end": 21.52
+ },
+ {
+  "text": "one",
+  "start": 21.52,
+  "end": 21.62
+ },
+ {
+  "text": "at",
+  "start": 21.62,
+  "end": 21.74
+ },
+ {
+  "text": "night",
+  "start": 21.74,
+  "end": 21.9
+ },
+ {
+  "text": "for",
+  "start": 21.9,
+  "end": 22.1
+ },
+ {
+  "text": "a",
+  "start": 22.1,
+  "end": 22.16
+ },
+ {
+  "text": "snack.",
+  "start": 22.16,
+  "end": 22.32
+ },
+ {
+  "text": "They're",
+  "start": 22.62,
+  "end": 22.8
+ },
+ {
+  "text": "resealable,",
+  "start": 22.8,
+  "end": 23.44
+ },
+ {
+  "text": "but",
+  "start": 23.52,
+  "end": 23.64
+ },
+ {
+  "text": "these",
+  "start": 23.64,
+  "end": 23.94
+ },
+ {
+  "text": "are",
+  "start": 23.94,
+  "end": 24.18
+ },
+ {
+  "text": "selling",
+  "start": 24.18,
+  "end": 24.42
+ },
+ {
+  "text": "out",
+  "start": 24.42,
+  "end": 24.62
+ },
+ {
+  "text": "quick",
+  "start": 24.62,
+  "end": 24.8
+ },
+ {
+  "text": "since",
+  "start": 24.8,
+  "end": 25.06
+ },
+ {
+  "text": "they're",
+  "start": 25.06,
+  "end": 25.34
+ },
+ {
+  "text": "a",
+  "start": 25.34,
+  "end": 25.42
+ },
+ {
+  "text": "brand",
+  "start": 25.42,
+  "end": 25.56
+ },
+ {
+  "text": "new",
+  "start": 25.56,
+  "end": 25.74
+ },
+ {
+  "text": "flavor.",
+  "start": 25.74,
+  "end": 26.04
+ },
+ {
+  "text": "So",
+  "start": 26.2,
+  "end": 26.32
+ },
+ {
+  "text": "if",
+  "start": 26.32,
+  "end": 26.42
+ },
+ {
+  "text": "you",
+  "start": 26.42,
+  "end": 26.48
+ },
+ {
+  "text": "wanna",
+  "start": 26.48,
+  "end": 26.56
+ },
+ {
+  "text": "get",
+  "start": 26.56,
+  "end": 26.7
+ },
+ {
+  "text": "the",
+  "start": 26.7,
+  "end": 26.78
+ },
+ {
+  "text": "cashews",
+  "start": 26.78,
+  "end": 27.04
+ },
+ {
+  "text": "by",
+  "start": 27.04,
+  "end": 27.24
+ },
+ {
+  "text": "Smackin',",
+  "start": 27.24,
+  "end": 27.62
+ },
+ {
+  "text": "I'd",
+  "start": 27.62,
+  "end": 27.72
+ },
+ {
+  "text": "click",
+  "start": 27.72,
+  "end": 27.9
+ },
+ {
+  "text": "the",
+  "start": 27.9,
+  "end": 28.02
+ },
+ {
+  "text": "link",
+  "start": 28.02,
+  "end": 28.14
+ },
+ {
+  "text": "in",
+  "start": 28.14,
+  "end": 28.22
+ },
+ {
+  "text": "this",
+  "start": 28.22,
+  "end": 28.3
+ },
+ {
+  "text": "video",
+  "start": 28.3,
+  "end": 28.5
+ },
+ {
+  "text": "before",
+  "start": 28.5,
+  "end": 28.72
+ },
+ {
+  "text": "they're",
+  "start": 28.72,
+  "end": 28.94
+ },
+ {
+  "text": "gone.",
+  "start": 28.94,
+  "end": 29.06
+ }
+]
