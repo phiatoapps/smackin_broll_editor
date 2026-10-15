@@ -191,38 +191,40 @@ def schedule_multi(takes: list[MTake], words: list[Word], chars: list[Character]
 
 
 def _sound_edge(env: np.ndarray, i: int, soft: float, direction: int, limit: int, hop: float,
-                quiet: float = 0.03, loud: float = 0.015, hard_limit: int | None = None) -> int:
-    """From frame i (edge of a loud run) walk outward while the sound is still above
-    `soft`; stop at the first stretch of `quiet` seconds below it. If no quiet comes
-    before `limit`, return the quietest frame on the way (the dip between words)."""
-    need = max(1, int(round(quiet / hop)))
+                quiet: float = 0.03, loud: float = 0.015, hard_limit: int | None = None,
+                tail: float = 0.12) -> int:
+    """From frame i (edge of a loud run) find where to cut, never inside a word:
+    1. walk while the sound is still speech-loud (> `loud`), up to `limit` (and on to
+       `hard_limit` if the speech simply keeps going);
+    2. then follow a soft ending (s/f/t tails, breathy onsets: > `soft`) for at most
+       `tail` seconds, stopping at the first `quiet` stretch, else at the quietest point.
+    Bounding step 2 keeps faint room noise from adding dead air."""
     n = len(env)
-    k, run, best, best_v = i, 0, i, np.inf
-    dip_reach = int(round(0.45 / hop))  # no quiet found: cut at the deepest dip
-    while (k < limit if direction > 0 else k > limit) and 0 <= k < n:
-        v = env[k]
-        if v < best_v and abs(k - i) <= dip_reach:
-            best, best_v = k, v
+    lim = hard_limit if hard_limit is not None else limit
+    k = i
+    while (k < lim if direction > 0 else k > lim) and 0 <= k < n and env[k] > loud:
+        k += direction
+    need = max(1, int(round(quiet / hop)))
+    end = k + direction * int(round(tail / hop))
+    run, best, best_v = 0, k, np.inf
+    j = k
+    while (j < end if direction > 0 else j > end) and (j < lim if direction > 0 else j > lim) and 0 <= j < n:
+        v = env[j]
+        if v < best_v:
+            best, best_v = j, v
         if v < soft:
             run += 1
             if run >= need:
-                return k - direction * (need - 1)
+                return j - direction * (need - 1)
         else:
             run = 0
-        k += direction
-    if best_v <= loud:
-        return best
-    # Still speaking at the limit and no real dip: never cut there. Keep walking
-    # (up to hard_limit) until the sound actually drops.
-    if hard_limit is not None:
-        while (k < hard_limit if direction > 0 else k > hard_limit) and 0 <= k < n and env[k] > soft:
-            k += direction
-    return k
+        j += direction
+    return best if best_v < np.inf else k
 
 
 def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float = 0.035, edge: float = 0.03,
             thr: float | None = None, soft: float | None = None, reach: float = 0.45, hop: float = 0.01,
-            min_sound: float = 0.08, min_piece: float = 0.3, words: list | None = None) -> dict:
+            min_sound: float = 0.08, min_piece: float = 0.2, words: list | None = None) -> dict:
     """Cut dead air: every silence in the speaker's audio longer than `max_gap` is cut
     down to `keep` on each side, including at the start/end of each line (trimmed to
     `edge`). A line with a pause in it becomes several pieces back to back - the
@@ -271,7 +273,11 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
                 i += 1
         # drop clicks/breaths (too short to be a word); keep a short word with its
         # neighbour rather than making a flicker-length jump cut
-        runs = [r for r in runs if (r[1] - r[0]) * hop >= min_sound] or runs
+        # Words peak well above a breath, and stay up for a syllable (a mouth click or
+        # tap spikes loud for only a couple of hundredths of a second).
+        runs = [r for r in runs if (r[1] - r[0]) * hop >= min_sound
+                and env[a + r[0]:a + r[1]].max() >= 2.5 * thr
+                and (env[a + r[0]:a + r[1]] > 2.5 * thr).sum() * hop >= 0.09] or runs
         merged = []
         for r in runs:
             if merged and ((merged[-1][1] - merged[-1][0]) * hop < min_piece or (r[1] - r[0]) * hop < min_piece):
@@ -610,7 +616,8 @@ class LayerCompositor:
 
     def __init__(self, plan: MPlan, plate: np.ndarray, props: dict[str, np.ndarray],
                  scenery: dict[str, np.ndarray] | None = None, medians: dict[str, np.ndarray] | None = None,
-                 depth: list[str] | None = None, dilate: int = 2, soften: float = 1.0, reach: float = 12):
+                 depth: list[str] | None = None, dilate: int = 2, soften: float = 1.0, reach: float = 12,
+                 seam_blur: float = 10.0):
         import cv2
 
         self.cv2 = cv2
@@ -650,8 +657,15 @@ class LayerCompositor:
             self.base[cols >= path[:, None]] = i + 1
         # Background (and each take's props) come only from the take that owns that part
         # of the room - so props never pop in and out between cuts.
-        self.base_soft = [cv2.GaussianBlur((self.base == i).astype(np.float32), (0, 0), 2)
+        # Soft enough (~40px at full size) that small lighting differences between
+        # takes fade across instead of showing as a line down the middle.
+        self.base_soft = [cv2.GaussianBlur((self.base == i).astype(np.float32), (0, 0), seam_blur)
                           for i in range(len(names))]
+        # Band around each background boundary, for per-frame exposure matching.
+        cols = np.arange(w)[None, :]
+        self.band = np.zeros((h, w), bool)
+        for path in cut_cols:
+            self.band |= np.abs(cols - path[:, None]) < int(0.10 * w)
         # Default depth: the middle character at the back, the outer ones in front.
         self.depth = depth or sorted(names, key=lambda n: -abs(plan.char(n).center - 0.5))[::-1]
         self.kd = np.ones((2 * dilate + 1, 2 * dilate + 1), np.uint8)
@@ -661,6 +675,34 @@ class LayerCompositor:
 
     def reset(self) -> None:
         self.prev = {}
+
+    def exposure(self, small: dict[str, np.ndarray], state: dict) -> dict[str, np.ndarray]:
+        """Per-frame RGB gain per take so plain room near the seams matches the empty-room
+        plate - cancels auto-exposure / white-balance drift that shows as a middle line.
+        Smoothed over time; `state` carries it between frames."""
+        gains = {}
+        for n in self.names:
+            f = small[n]
+            plain = self.band & (np.abs(f - self.plate).sum(-1) < 40) & (f.mean(-1) > 20)
+            if plain.sum() < 300:
+                g = np.ones(3, np.float32)
+            else:
+                g = np.median(self.plate[plain] / np.maximum(f[plain], 1), axis=0).astype(np.float32)
+                g = np.clip(g, 0.9, 1.1)
+            prev = state.get(n)
+            gains[n] = g if prev is None else 0.85 * prev + 0.15 * g
+            state[n] = gains[n]
+        return gains
+
+    def seam_delta(self, small: dict[str, np.ndarray]) -> float:
+        """Colour mismatch between neighbouring takes' plain room inside the seam band."""
+        worst = 0.0
+        for i in range(len(self.names) - 1):
+            a, b = small[self.names[i]], small[self.names[i + 1]]
+            plain = self.band & (np.abs(a - self.plate).sum(-1) < 40) & (np.abs(b - self.plate).sum(-1) < 40)
+            if plain.sum() > 300:
+                worst = max(worst, float(np.abs(a[plain].mean(0) - b[plain].mean(0)).max()))
+        return worst
 
     def alphas(self, small: dict[str, np.ndarray]) -> tuple[dict[str, np.ndarray], dict]:
         cv2 = self.cv2
@@ -782,6 +824,7 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
     # full-resolution lighting correction per take (global gain x smooth local field)
     light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
     report: list[dict] = []
+    exp_state: dict = {}
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -833,14 +876,19 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 for fi in range(n):
                     fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
+                    eg = comp.exposure(small, exp_state)
+                    fr = {k: np.clip(v * eg[k], 0, 255) for k, v in fr.items()}
+                    small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
                     al, st = comp.alphas(small)
+                    sd = comp.seam_delta(small)
                     out = np.zeros_like(fr[names[0]])
                     for k in names:
                         a = cv2.resize(al[k], (W, H), interpolation=cv2.INTER_LINEAR)[..., None]
                         out += a * fr[k]
                     report.append({"t": round(done / FPS, 2), "line": seg.line, "speaker": seg.char,
                                    **{f"ghost_{k}": v[0] for k, v in st.items()},
-                                   **{f"covered_{k}": round(v[1], 3) for k, v in st.items()}})
+                                   **{f"covered_{k}": round(v[1], 3) for k, v in st.items()},
+                                   "seam_delta": round(sd, 1)})
                     # camera framing: crop the composite and scale back up (labels stay
                     # the same size and follow the people they belong to)
                     framing = seg.framing

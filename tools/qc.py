@@ -50,6 +50,10 @@ bad = [l.split("] ")[-1] for l in log.splitlines() if "black_start" in l or "fre
 print(f"black/frozen: {len(bad)} {bad[:10]}")
 if len(sys.argv) > 2:
     r = json.loads(Path(sys.argv[2]).read_text())
+    if "seam_delta" in r[0]:
+        sd = [x["seam_delta"] for x in r]
+        print(f"seam colour mismatch (0-255 per channel): max {max(sd):.1f}, mean {np.mean(sd):.1f}"
+              f" (under ~6 is invisible), frames over 6: {sum(v > 6 for v in sd)}")
     for n in [k[6:] for k in r[0] if k.startswith("ghost_")]:
         print(f"{n}: see-through px max {max(x['ghost_' + n] for x in r)}, covered max {max(x['covered_' + n] for x in r):.2f}")
 if opts.get("--plan") and opts.get("--raw"):
