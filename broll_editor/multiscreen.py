@@ -873,6 +873,7 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                         st, rate = seg.listen[c.name]
                         readers[c.name] = _Reader(raw, st, n, W, H, rate)
                 comp.reset()
+                exp_state.clear()  # new footage at a cut: match its exposure fresh, no lag
                 for fi in range(n):
                     fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
