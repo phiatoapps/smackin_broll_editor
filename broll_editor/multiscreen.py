@@ -190,15 +190,49 @@ def schedule_multi(takes: list[MTake], words: list[Word], chars: list[Character]
     return plan
 
 
+def _sound_edge(env: np.ndarray, i: int, soft: float, direction: int, limit: int, hop: float,
+                quiet: float = 0.03, loud: float = 0.015, hard_limit: int | None = None) -> int:
+    """From frame i (edge of a loud run) walk outward while the sound is still above
+    `soft`; stop at the first stretch of `quiet` seconds below it. If no quiet comes
+    before `limit`, return the quietest frame on the way (the dip between words)."""
+    need = max(1, int(round(quiet / hop)))
+    n = len(env)
+    k, run, best, best_v = i, 0, i, np.inf
+    dip_reach = int(round(0.45 / hop))  # no quiet found: cut at the deepest dip
+    while (k < limit if direction > 0 else k > limit) and 0 <= k < n:
+        v = env[k]
+        if v < best_v and abs(k - i) <= dip_reach:
+            best, best_v = k, v
+        if v < soft:
+            run += 1
+            if run >= need:
+                return k - direction * (need - 1)
+        else:
+            run = 0
+        k += direction
+    if best_v <= loud:
+        return best
+    # Still speaking at the limit and no real dip: never cut there. Keep walking
+    # (up to hard_limit) until the sound actually drops.
+    if hard_limit is not None:
+        while (k < hard_limit if direction > 0 else k > hard_limit) and 0 <= k < n and env[k] > soft:
+            k += direction
+    return k
+
+
 def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float = 0.035, edge: float = 0.03,
-            thr: float | None = None, hop: float = 0.01, min_sound: float = 0.08, min_piece: float = 0.3) -> dict:
+            thr: float | None = None, soft: float | None = None, reach: float = 0.45, hop: float = 0.01,
+            min_sound: float = 0.08, min_piece: float = 0.3, words: list | None = None) -> dict:
     """Cut dead air: every silence in the speaker's audio longer than `max_gap` is cut
     down to `keep` on each side, including at the start/end of each line (trimmed to
     `edge`). A line with a pause in it becomes several pieces back to back - the
-    speaker jump-cuts, while everyone listening keeps playing continuously.
+    speaker jump-cuts, while everyone listening keeps playing continuously. Cuts
+    follow soft word endings out to real quiet, so no word gets clipped.
     """
     if thr is None:
         thr = max(0.008, float(np.percentile(env, 20)) * 3)
+    if soft is None:
+        soft = max(0.007, float(np.percentile(env, 50)) * 1.6)  # soft endings, just above room noise
     loud = env > thr
     # bridge tiny dips inside words (plosives, s-sounds)
     k = int(round(0.05 / hop))
@@ -206,6 +240,17 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
     new, removed = [], 0.0
     for seg in plan.segments:
         a, b = int(round(seg.start / hop)), int(round((seg.start + seg.duration) / hop))
+        # Words just outside this line (a retake, an ad-lib) are a hard wall: line
+        # edges may grow to catch soft endings, but never into the next word.
+        wall_lo, wall_hi = 0, len(env)
+        if words:
+            s0, s1 = seg.start, seg.start + seg.duration
+            for w in words:
+                ws_, we_ = (w.start, w.end) if hasattr(w, "start") else (w["start"], w["end"])
+                if we_ <= s0 + 0.02 and we_ < s0:
+                    wall_lo = max(wall_lo, int(round((we_ + 0.03) / hop)))
+                if ws_ >= s1 - 0.02 and ws_ > s1:
+                    wall_hi = min(wall_hi, int(round((ws_ - 0.03) / hop)))
         m = loud[a:b]
         if not m.any():
             new.append(seg)
@@ -234,13 +279,29 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
             else:
                 merged.append(list(r))
         runs = merged
+        # Cut points: follow each sound outward past the loud threshold while it stays
+        # above the soft threshold (s/f/t/th endings, breathy onsets), then cut in the
+        # quiet right after it. If speech runs straight into other speech (no quiet in
+        # reach), cut at the quietest point in the gap instead. Never inside a word.
         pieces = []
         for idx, (i, j) in enumerate(runs):
             lead = edge if idx == 0 else keep
             tail = edge if idx == len(runs) - 1 else keep
-            ps = max(seg.start, seg.start + i * hop - lead)
-            pe = min(seg.start + seg.duration, seg.start + j * hop + tail)
-            pieces.append((ps, pe))
+            lo_lim = a - int(reach / hop) if idx == 0 else a + (runs[idx - 1][1] if idx else 0)
+            hi_lim = b + int(reach / hop) if idx == len(runs) - 1 else a + runs[idx + 1][0]
+            if idx == 0:
+                lo_lim = max(lo_lim, min(wall_lo, a))
+            if idx == len(runs) - 1:
+                hi_lim = min(hi_lim, max(wall_hi, b))
+            hard_lo = max(a - int(1.0 / hop), min(wall_lo, a)) if idx == 0 else lo_lim
+            hard_hi = min(b + int(1.0 / hop), max(wall_hi, b)) if idx == len(runs) - 1 else hi_lim
+            ps = _sound_edge(env, a + i, soft, -1, lo_lim, hop, loud=thr, hard_limit=hard_lo) * hop - lead
+            pe = _sound_edge(env, a + j, soft, +1, hi_lim, hop, loud=thr, hard_limit=hard_hi) * hop + tail
+            ps, pe = max(ps, hard_lo * hop), min(pe, hard_hi * hop)
+            if pieces and ps <= pieces[-1][1] + 0.02:
+                pieces[-1] = (pieces[-1][0], pe)  # nothing worth cutting between them
+            else:
+                pieces.append((ps, pe))
         out_t = 0.0
         for idx, (ps, pe) in enumerate(pieces):
             d = pe - ps

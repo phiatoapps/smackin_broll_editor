@@ -138,6 +138,12 @@ shot out of 10 from the sheet it writes. Anything under 8 (half-cut faces, a
 neighbour's shoulder filling the frame, ghosting, dead air, frozen or black
 frames) gets fixed and re-rendered before delivery.
 
+No clipped words: pass `--plan plan.json --raw raw.mp4 --words words.json` and
+it lists every cut with sound right past it, with the words around it, to
+confirm or clear. Then transcribe the final audio and read it back against the
+takes. Pass the same (no-VAD) word timings to `tighten(..., words=words)` so
+line edges stop at the next word instead of running into it.
+
 ## Use from Python
 
 ```python
