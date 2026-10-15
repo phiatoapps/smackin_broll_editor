@@ -131,6 +131,14 @@ a pause become back-to-back pieces: the speaker jump-cuts, listeners keep
 playing continuously. Clicks/breaths are dropped; a short word stays attached to
 its line instead of becoming a flicker-length cut.
 
+### Listeners face the speaker (every video)
+
+Whoever isn't talking must be looking at whoever is (never the other way).
+`python -m broll_editor.gaze raw.mp4 LO HI X0 X1 gaze_B.json` scans a take's head
+turn; `gaze.listening_ranges()` + `gaze.assign_listening()` re-pick listening
+footage only from stretches where that person is quiet and facing the speaker;
+`python tools/gazecheck.py DIR` verifies every listening shot.
+
 ### Quality check (every video)
 
 After rendering, run `python tools/qc.py final.mp4 report.json` and grade every
