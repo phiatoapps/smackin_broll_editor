@@ -131,6 +131,14 @@ a pause become back-to-back pieces: the speaker jump-cuts, listeners keep
 playing continuously. Clicks/breaths are dropped; a short word stays attached to
 its line instead of becoming a flicker-length cut.
 
+### One-command build per video
+
+`python tools/build_cfg.py VIDEO_DIR` reads `cfg.json` (A/B take ranges and
+positions plus the chosen takes) with `proxy.mp4` and `words_all.json`, and does
+the whole pipeline: word-safe take bounds (never inside a word, never into the
+next one, mostly-silent takes flagged), no dead air, zoom framing, and listening
+shots picked only where the listener faces the speaker.
+
 ### Listeners face the speaker (every video)
 
 Whoever isn't talking must be looking at whoever is (never the other way).

@@ -102,32 +102,38 @@ def listening_ranges(timeline: list[dict], toward: str, speech: list[tuple[float
     return [(a, b) for a, b in out if b - a >= min_len]
 
 
-def assign_listening(plan, char: str, ranges: list[tuple[float, float]]) -> list[str]:
-    """Re-pick `char`'s listening footage from `ranges` only. Each shot takes unused
-    footage (preferring the stretch right after the previous shot, for continuity);
-    footage is only reused once every good stretch is used up. Returns notes about
-    any compromise."""
+def assign_listening(plan, char: str, ranges: list[tuple[float, float]], min_rate: float = 0.8) -> list[str]:
+    """Re-pick `char`'s listening footage from `ranges` only. In order of preference:
+    any unused stretch long enough (longest shots placed first, tightest fit); an
+    unused stretch at most 20% short, played slightly slower; and only when all of
+    that fails, reuse the longest stretch. Returns notes on compromises."""
     free = [list(r) for r in ranges]
-    notes, last_end = [], None
-    for seg in plan.segments:
-        if char not in seg.listen:
-            continue
+    notes = []
+    segs = [s for s in plan.segments if char in s.listen]
+    # Longest shots first, each into the tightest unused stretch it fits (best-fit
+    # decreasing), so short shots can't eat the only stretches long shots fit in.
+    for seg in sorted(segs, key=lambda s: -s.duration):
         need = seg.duration
+        pick = None
         cands = [f for f in free if f[1] - f[0] >= need]
         if cands:
-            after = [f for f in cands if last_end is not None and f[0] >= last_end - 0.01]
-            f = min(after, key=lambda f: f[0]) if after else min(cands, key=lambda f: f[0])
-            st = f[0]
-            seg.listen[char] = [round(st, 3), 1.0]
-            f[0] = st + need + 0.1
-            last_end = st + need
+            pick = min(cands, key=lambda f: f[1] - f[0]); st, rate = pick[0], 1.0
+        else:
+            cands = [f for f in free if f[1] - f[0] >= need * min_rate]
+            if cands:
+                pick = max(cands, key=lambda f: f[1] - f[0]); st = pick[0]
+                rate = round((pick[1] - pick[0]) / need, 3)
+                notes.append(f"slowed to {rate:.2f}x for '{seg.text[:25]}'")
+        if pick is not None:
+            seg.listen[char] = [round(st, 3), min(rate, 1.0)]
+            pick[0] = st + need * min(rate, 1.0) + 0.05
             continue
         a, b = max(ranges, key=lambda r: r[1] - r[0])
-        off = min(max(0.0, (b - a - need) / 2), b - a)  # middle of the longest stretch
         if b - a >= need:
+            off = (b - a - need) / 2
             seg.listen[char] = [round(a + off, 3), 1.0]
             notes.append(f"reused {a + off:.1f}s for '{seg.text[:25]}'")
         else:
-            seg.listen[char] = [round(a, 3), round(max(0.75, (b - a) / need), 3)]
-            notes.append(f"slowed {a:.1f}s for '{seg.text[:25]}'")
+            seg.listen[char] = [round(a, 3), round(max(0.6, (b - a) / need), 3)]
+            notes.append(f"reused+slowed {a:.1f}s for '{seg.text[:25]}'")
     return notes

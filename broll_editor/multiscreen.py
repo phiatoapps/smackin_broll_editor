@@ -202,8 +202,16 @@ def _sound_edge(env: np.ndarray, i: int, soft: float, direction: int, limit: int
     n = len(env)
     lim = hard_limit if hard_limit is not None else limit
     k = i
-    while (k < lim if direction > 0 else k > lim) and 0 <= k < n and env[k] > loud:
-        k += direction
+    gap = int(round(0.06 / hop))  # a dip this short inside speech is mid-word ("dea-ls")
+    while (k < lim if direction > 0 else k > lim) and 0 <= k < n:
+        if env[k] > loud:
+            k += direction
+            continue
+        ahead = env[k:k + gap + 1] if direction > 0 else env[max(0, k - gap):k + 1]
+        if (ahead > loud).any():
+            k += direction
+            continue
+        break
     need = max(1, int(round(quiet / hop)))
     end = k + direction * int(round(tail / hop))
     run, best, best_v = 0, k, np.inf
@@ -249,10 +257,10 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
             s0, s1 = seg.start, seg.start + seg.duration
             for w in words:
                 ws_, we_ = (w.start, w.end) if hasattr(w, "start") else (w["start"], w["end"])
-                if we_ <= s0 + 0.02 and we_ < s0:
-                    wall_lo = max(wall_lo, int(round((we_ + 0.03) / hop)))
-                if ws_ >= s1 - 0.02 and ws_ > s1:
-                    wall_hi = min(wall_hi, int(round((ws_ - 0.03) / hop)))
+                if we_ <= s0 + 0.02:
+                    wall_lo = max(wall_lo, int(round((we_ + 0.01) / hop)))
+                if ws_ >= s1 - 0.02:
+                    wall_hi = min(wall_hi, int(round((ws_ - 0.01) / hop)))
         m = loud[a:b]
         if not m.any():
             new.append(seg)

@@ -23,7 +23,9 @@ for i, s in enumerate(p.segments):
         ys = yaws(n, st, st + s.duration * rate)
         if not ys: continue
         good = sum(1 for y in ys if y is not None and toward[n] * y >= 5) / len(ys)
-        away = sum(1 for y in ys if y is not None and toward[n] * y <= -5) / len(ys)
+        # a single-sample flicker (0.2s head bob) isn't "looking away"; two in a row is
+        aw = [y is not None and toward[n] * y <= -5 for y in ys]
+        away = sum(1 for i in range(len(aw)) if aw[i] and ((i > 0 and aw[i - 1]) or (i + 1 < len(aw) and aw[i + 1]))) / len(ys)
         flag = "AWAY" if away > 0.05 else ("weak" if good < 0.8 else "ok")
         bad += flag != "ok"
         if flag != "ok" or "-v" in sys.argv:
