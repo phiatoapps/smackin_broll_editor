@@ -139,6 +139,15 @@ the whole pipeline: word-safe take bounds (never inside a word, never into the
 next one, mostly-silent takes flagged), no dead air, zoom framing, and listening
 shots picked only where the listener faces the speaker.
 
+Clone Argument format: `"labels": {"A": "2027", "B": "2009"}` puts a label over
+each clone for the whole video, and a unison pick
+`[0, "U", a_start, a_end, false, text, b_start, b_end]` opens with both clones
+saying the line together (both takes side by side, both voices mixed, trimmed to
+where the voices stop). `"band": [lo, hi]` narrows where both clones may appear;
+use it when they never cross the middle, so lighting drift in one take is never
+read as a body over the other clone. `"ends": {"text prefix": t}` holds a soft
+last word the envelope misses.
+
 ### Listeners face the speaker (every video)
 
 Whoever isn't talking must be looking at whoever is (never the other way).
