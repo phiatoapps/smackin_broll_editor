@@ -109,7 +109,7 @@ def assign_listening(plan, char: str, ranges: list[tuple[float, float]], min_rat
     that fails, reuse the longest stretch. Returns notes on compromises."""
     free = [list(r) for r in ranges]
     notes = []
-    segs = [s for s in plan.segments if char in s.listen]
+    segs = [s for s in plan.segments if char in s.listen and not getattr(s, "unison", False)]
     # Longest shots first, each into the tightest unused stretch it fits (best-fit
     # decreasing), so short shots can't eat the only stretches long shots fit in.
     for seg in sorted(segs, key=lambda s: -s.duration):

@@ -75,6 +75,9 @@ class MSegment:
     # Animated pull-out at the start of the line: [start_zoom, seconds]. Used on the
     # opening line so the hook lands on everyone in frame.
     pull_out: list[float] | None = None
+    # Unison line: everyone speaks at once. Listeners' footage (seg.listen) is their own
+    # take of the same line, and their audio is mixed in with the speaker's.
+    unison: bool = False
 
 
 @dataclass
@@ -249,6 +252,9 @@ def tighten(plan: MPlan, env: np.ndarray, *, max_gap: float = 0.08, keep: float 
     loud = np.convolve(loud.astype(np.float32), np.ones(k), mode="same") > 0
     new, removed = [], 0.0
     for seg in plan.segments:
+        if seg.unison:  # both voices must stay in sync: no jump cuts inside the unison line
+            new.append(seg)
+            continue
         a, b = int(round(seg.start / hop)), int(round((seg.start + seg.duration) / hop))
         # Words just outside this line (a retake, an ad-lib) are a hard wall: line
         # edges may grow to catch soft endings, but never into the next word.
@@ -930,20 +936,32 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
         if enc.wait() != 0:
             raise RuntimeError("video encode failed")
 
-        # Audio: each segment's speaker audio, exactly as long as its video.
-        parts, filters = [], []
-        for k, seg in enumerate(plan.segments):
-            d = round(seg.duration * FPS) / FPS
-            fade = min(0.012, d / 4)
-            filters.append(
-                f"[0:a]atrim={seg.start:.4f}:{seg.start + d:.4f},asetpts=PTS-STARTPTS,"
-                f"apad=whole_dur={d:.4f},atrim=0:{d:.4f},afade=t=in:d={fade},"
-                f"afade=t=out:st={d - fade:.4f}:d={fade}[a{k}]"
-            )
-            parts.append(f"[a{k}]")
-        filters.append("".join(parts) + f"concat=n={len(parts)}:v=0:a=1[a]")
-        cmd = ["ffmpeg", "-y", "-hide_banner", "-i", str(raw), "-i", str(video),
-               "-filter_complex", ";".join(filters), "-map", "1:v", "-map", "[a]",
+        # Audio: each segment's speaker audio, exactly as long as its video. Sliced
+        # by sample in numpy (an ffmpeg graph mixing far-apart trims of one input
+        # pulled the wrong stretch of audio into unison lines).
+        sr = 48000
+        pcm = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(raw), "-vn", "-ac", "2",
+                              "-ar", str(sr), "-f", "f32le", "-"], capture_output=True, check=True).stdout
+        src = np.frombuffer(pcm, np.float32).reshape(-1, 2)
+        pieces, frames_out = [], 0
+        for seg in plan.segments:
+            frames_out += round(seg.duration * FPS)
+            n = round(frames_out / FPS * sr) - sum(len(p) for p in pieces)
+            fade = min(int(0.012 * sr), n // 4)
+            ramp = np.ones(n, np.float32)
+            if fade:
+                ramp[:fade] = np.linspace(0, 1, fade)
+                ramp[n - fade:] = np.linspace(1, 0, fade)
+            starts = [seg.start] + ([st for st, _ in seg.listen.values()] if seg.unison else [])
+            mix = np.zeros((n, 2), np.float32)
+            for st in starts:
+                cut = src[int(round(st * sr)):int(round(st * sr)) + n]
+                mix[:len(cut)] += cut
+            pieces.append(mix * ramp[:, None] / len(starts) ** 0.5)
+        wav = tmp / "audio.f32"
+        np.concatenate(pieces).astype(np.float32).tofile(wav)
+        cmd = ["ffmpeg", "-y", "-hide_banner", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", str(wav),
+               "-i", str(video), "-map", "1:v", "-map", "0:a",
                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                "-progress", "pipe:1", "-nostats", str(output)]
         _run_ffmpeg(cmd, total, None)

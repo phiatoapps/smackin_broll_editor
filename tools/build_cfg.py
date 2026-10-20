@@ -1,8 +1,13 @@
 """python tools/build_cfg.py VIDEO_DIR  (reads VIDEO_DIR/cfg.json, writes plan.json)
 
 cfg.json: {"A": [lo, hi, center], "B": [lo, hi, center],
+           "labels": {"A": "2009", "B": "2027"},            (optional)
+           "ends": {"text prefix": raw_end},                 (optional, soft last words)
            "picks": [[line, "A"|"B", start, end, zoom, text], ...]}
-A is on the left (pays retail), B on the right.
+A is the clone standing on the left, B the one on the right.
+A unison pick (both clones say the line together) is
+    [line, "U", a_start, a_end, zoom, text, b_start, b_end]
+and plays A's take with B's take of the same line beside it, audio mixed.
 """
 import sys, json, os, numpy as np
 from pathlib import Path
@@ -18,9 +23,18 @@ wobj = [Word(w["text"], w["start"], w["end"]) for w in words]
 P = f"{D}/proxy.mp4"
 env = np.load(f"{D}/env.npy") if os.path.exists(f"{D}/env.npy") else ms.audio_envelope(P)
 np.save(f"{D}/env.npy", env)
-chars = [ms.Character("A", *cfg["A"], "", 0.20), ms.Character("B", *cfg["B"], "", 0.20)]
-takes = []
-for l, ch, a, b, z, t in cfg["picks"]:
+labels = cfg.get("labels", {})
+chars = [ms.Character("A", *cfg["A"], labels.get("A", ""), 0.20), ms.Character("B", *cfg["B"], labels.get("B", ""), 0.20)]
+takes, unison = [], {}
+for k, (l, ch, a, b, z, t, *other) in enumerate(cfg["picks"]):
+    if ch == "U":
+        # both voices start together: each take starts just before its own speech onset
+        ra, rb = ms.refine(env, a, b, back=0.3, fwd=0.4)
+        oa, ob = ms.refine(env, *other, back=0.3, fwd=0.4)
+        d = max(rb - ra, ob - oa) + 0.10
+        unison[k] = round(oa - 0.04, 3)
+        takes.append(ms.MTake(l, "A", ra - 0.04, ra - 0.04 + d, z, t))
+        continue
     # never cut into a word: if the take ends (or starts) inside one word, grow it
     # once to cover that word - never chained on into the next words
     a0, b0 = a, b
@@ -45,9 +59,18 @@ for l, ch, a, b, z, t in cfg["picks"]:
     lo = max(prv) + 0.01 if prv else -1e9
     takes.append(ms.MTake(l, ch, max(ra - 0.04, lo, 0), min(rb + 0.06, hi), z, t))
 plan = ms.schedule_multi(takes, wobj, chars, [[0.30, 0.92]])
+for k, b_start in unison.items():
+    plan.segments[k].unison = True
+    plan.segments[k].listen["B"] = [b_start, 1.0]
 plan.counter_y = 0.55
 plan.gains = ms.match_gains(P, chars)
 print(os.path.basename(D), ms.tighten(plan, env, thr=0.015, words=words))
+# hand-checked word endings the envelope misses (a soft final word): {"text prefix": raw end}
+for prefix, end in cfg.get("ends", {}).items():
+    seg = [s for s in plan.segments if s.text.startswith(prefix)][-1]
+    if end > seg.start + seg.duration:
+        print(f"  held '{prefix}' to {end} (+{end - seg.start - seg.duration:.2f}s)")
+        seg.duration = round(end - seg.start, 3)
 ms.auto_framing(plan)
 # listeners face the speaker
 for n, side, toward in (("A", (0.0, 0.55), "right"), ("B", (0.45, 1.0), "left")):
