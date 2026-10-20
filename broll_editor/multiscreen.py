@@ -639,6 +639,7 @@ class LayerCompositor:
         self.plate = plate
         self.props = props
         self.scenery = scenery or {}
+        self.medians = medians or {}
         h, w = plate.shape[:2]
         self.h, self.w = h, w
         names = [c.name for c in plan.chars]
@@ -724,7 +725,13 @@ class LayerCompositor:
         for n in self.names:
             # Props and scenery changes stay put for the whole take; they aren't
             # anyone's body (otherwise hole-filling glues them onto the person).
-            exclude = self.props[n] | self.scenery.get(n, False)
+            # A scenery change only counts while it is actually what the take shows there;
+            # when the person moves in front of it, that is their body (a very still head
+            # can otherwise read as "scenery" and get painted over with wall).
+            scen = self.scenery.get(n, False)
+            if n in self.medians and isinstance(scen, np.ndarray) and scen.any():
+                scen = scen & (np.abs(small[n] - self.medians[n]).sum(-1) < 40)
+            exclude = self.props[n] | scen
             b = _person_mask(small[n], self.plate, self.zone[n] & ~exclude)
             body[n] = b
         # People on top of the background, in depth order (later = in front).

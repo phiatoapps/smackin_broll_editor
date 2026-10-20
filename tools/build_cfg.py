@@ -3,6 +3,8 @@
 cfg.json: {"A": [lo, hi, center], "B": [lo, hi, center],
            "labels": {"A": "2009", "B": "2027"},            (optional)
            "ends": {"text prefix": raw_end},                 (optional, soft last words)
+           "band": [lo, hi],    (optional, default [0.30, 0.92]: where both clones may
+                                 appear; narrow it when they never cross the middle)
            "picks": [[line, "A"|"B", start, end, zoom, text], ...]}
 A is the clone standing on the left, B the one on the right.
 A unison pick (both clones say the line together) is
@@ -31,7 +33,7 @@ for k, (l, ch, a, b, z, t, *other) in enumerate(cfg["picks"]):
         # both voices start together: each take starts just before its own speech onset
         ra, rb = ms.refine(env, a, b, back=0.3, fwd=0.4)
         oa, ob = ms.refine(env, *other, back=0.3, fwd=0.4)
-        d = max(rb - ra, ob - oa) + 0.10
+        d = max(rb - ra, ob - oa) + 0.04
         unison[k] = round(oa - 0.04, 3)
         takes.append(ms.MTake(l, "A", ra - 0.04, ra - 0.04 + d, z, t))
         continue
@@ -58,7 +60,7 @@ for k, (l, ch, a, b, z, t, *other) in enumerate(cfg["picks"]):
     hi = min(nxt) - 0.01 if nxt else 1e9
     lo = max(prv) + 0.01 if prv else -1e9
     takes.append(ms.MTake(l, ch, max(ra - 0.04, lo, 0), min(rb + 0.06, hi), z, t))
-plan = ms.schedule_multi(takes, wobj, chars, [[0.30, 0.92]])
+plan = ms.schedule_multi(takes, wobj, chars, [cfg.get("band", [0.30, 0.92])])
 for k, b_start in unison.items():
     plan.segments[k].unison = True
     plan.segments[k].listen["B"] = [b_start, 1.0]
