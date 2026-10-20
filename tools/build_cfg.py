@@ -31,9 +31,13 @@ takes, unison = [], {}
 for k, (l, ch, a, b, z, t, *other) in enumerate(cfg["picks"]):
     if ch == "U":
         # both voices start together: each take starts just before its own speech onset
-        ra, rb = ms.refine(env, a, b, back=0.3, fwd=0.4)
-        oa, ob = ms.refine(env, *other, back=0.3, fwd=0.4)
-        d = max(rb - ra, ob - oa) + 0.04
+        ra, _ = ms.refine(env, a, b, back=0.3, fwd=0.4)
+        oa, _ = ms.refine(env, *other, back=0.3, fwd=0.4)
+
+        def voice_end(lo, hi):  # last speech-loud moment of the line (no trailing room tone)
+            loud = np.where(env[int(lo * 100):int(hi * 100)] > 0.03)[0]
+            return lo + (loud[-1] + 1) / 100 if len(loud) else hi
+        d = max(voice_end(ra, b) - ra, voice_end(oa, other[1]) - oa) + 0.10
         unison[k] = round(oa - 0.04, 3)
         takes.append(ms.MTake(l, "A", ra - 0.04, ra - 0.04 + d, z, t))
         continue
