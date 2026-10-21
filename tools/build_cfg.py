@@ -4,6 +4,9 @@ cfg.json: {"A": [lo, hi, center], "B": [lo, hi, center],
            "labels": {"A": "2009", "B": "2027"},            (optional)
            "label_changes": {"B": [[line, "NEW LABEL"]]},   (optional: label text from that line on)
            "ends": {"text prefix": raw_end},                 (optional, soft last words)
+           "empty": [lo, hi], "depth": ["B", "A"], "counter_y": 0.55,   (optional, see README)
+           "listen": {"text prefix": {"A": raw_start}},     (optional: hand-picked listening footage)
+           "framing": {"text prefix": [zoom, cx, cy] | null},   (optional: hand-picked camera framing)
            "band": [lo, hi],    (optional, default [0.30, 0.92]: where both clones may
                                  appear; narrow it when they never cross the middle)
            "picks": [[line, "A"|"B", start, end, zoom, text], ...]}
@@ -69,8 +72,10 @@ plan = ms.schedule_multi(takes, wobj, chars, [cfg.get("band", [0.30, 0.92])])
 for k, b_start in unison.items():
     plan.segments[k].unison = True
     plan.segments[k].listen["B"] = [b_start, 1.0]
-plan.counter_y = 0.55
+plan.counter_y = cfg.get("counter_y", 0.55)
 plan.label_changes = cfg.get("label_changes", {})
+plan.empty = cfg.get("empty")      # [lo, hi] seconds of empty room, if the clip has some
+plan.depth = cfg.get("depth")      # ["B", "A"]: back to front (stand-behind format)
 plan.gains = ms.match_gains(P, chars)
 print(os.path.basename(D), ms.tighten(plan, env, thr=0.015, words=words))
 # hand-checked word endings the envelope misses (a soft final word): {"text prefix": raw end}
@@ -95,6 +100,17 @@ for n, side, toward in (("A", (0.0, 0.55), "right"), ("B", (0.45, 1.0), "left"))
             break
     notes = gaze.assign_listening(plan, n, rng) if rng else ["NO GOOD LISTENING FOOTAGE"]
     print(f"  {n} listening ranges (yaw>={thr}): {len(rng)}, total {sum(b-a for a,b in rng):.1f}s  {notes}")
+# hand-picked framing: {"text prefix": [zoom, center_x, center_y]} or null for wide
+for prefix, fr in cfg.get("framing", {}).items():
+    for sg in [x for x in plan.segments if x.text.startswith(prefix)]:
+        sg.framing = fr
+# hand-picked listening footage: {"text prefix": {"A": raw_start}} (pieces of a split
+# line continue from where the previous piece's footage ended)
+for prefix, who in cfg.get("listen", {}).items():
+    for n, st in who.items():
+        for sg in [x for x in plan.segments if x.text.startswith(prefix)]:
+            sg.listen[n] = [round(st, 3), 1.0]
+            st += sg.duration
 plan.save(f"{D}/plan.json")
 t = 0
 for i, s in enumerate(plan.segments):

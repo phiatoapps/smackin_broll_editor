@@ -96,6 +96,11 @@ class MPlan:
     # Label changes mid-video: {name: [[line, new label], ...]} - from that script
     # line on, the character's label reads the new text (e.g. "PRO" pops on).
     label_changes: dict[str, list] = field(default_factory=dict)
+    # Seconds of the raw clip showing the empty room (nobody in frame), if any: the most
+    # reliable background, needed when the characters' spots overlap (stand-behind).
+    empty: list[float] | None = None
+    # Layer order, back to front (stand-behind: the one behind first). None = automatic.
+    depth: list[str] | None = None
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -460,8 +465,8 @@ def _sample_at(raw: Path, start: float, dur: float, fps: float, w: int, h: int) 
 
 
 def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, list[float]],
-                     size: tuple[int, int], counter_y: float | None = None, reach: float = 0.22
-                     ) -> tuple[np.ndarray, dict, dict, dict, dict]:
+                     size: tuple[int, int], counter_y: float | None = None, reach: float = 0.22,
+                     empty: list[float] | None = None) -> tuple[np.ndarray, dict, dict, dict, dict]:
     """Empty-room estimate at analysis resolution - the reference for deciding what in
     each take is "someone/something" vs. scenery.
 
@@ -476,6 +481,11 @@ def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, l
     w, h = size
     takes = {c.name: _sample_at(raw, c.lo, c.hi - c.lo, 1, w, h) * np.array(gains.get(c.name, [1, 1, 1]), np.float32)
              for c in chars}
+    if empty:
+        # an empty-room stretch joins as a pseudo-take standing infinitely far away, so
+        # it is "bare room" everywhere and wins the consensus wherever it agrees
+        takes["_empty"] = _sample_at(raw, empty[0], empty[1] - empty[0], 4, w, h)
+        chars = list(chars) + [Character("_empty", *empty, 1e3)]
     medians = {name: np.median(f, axis=0).astype(np.float32) for name, f in takes.items()}
     # Each spot comes only from takes whose character stands well away from it (so it
     # is bare room in those takes), skipping any take that has a prop standing there.
@@ -529,6 +539,9 @@ def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, l
     # Lighting can change across the room between takes (a lamp on in one take only),
     # which a single colour gain can't fix. Per take, measure plate/take on bare room far
     # from that take's character and spread it smoothly over the frame.
+    if empty:
+        chars = chars[:-1]
+        del takes["_empty"]
     light = {}
     for c in chars:
         med = medians[c.name]
@@ -569,14 +582,24 @@ def background_plate(raw: str | Path, chars: list[Character], gains: dict[str, l
 _KERN_CLOSE = None
 
 
-def _person_mask(frame: np.ndarray, plate: np.ndarray, zone: np.ndarray, thr: float = 45) -> np.ndarray:
-    """Solid silhouette of whatever in this take differs from the empty room, inside its zone."""
+def _person_mask(frame: np.ndarray, plate: np.ndarray, zone: np.ndarray, thr: float = 45,
+                 close: int = 11, grow: int = 0, grow_thr: float = 20) -> np.ndarray:
+    """Solid silhouette of whatever in this take differs from the empty room, inside its zone.
+    `close` bridges gaps where clothing matches what's behind it (bigger = more solid);
+    `grow` > 0 also takes faint differences (> grow_thr) within that many pixels of the
+    silhouette - a navy shirt in front of a black cabinet differs only a little."""
     import cv2
 
     d = np.abs(frame - plate).sum(-1)
     m = ((d > thr) & zone).astype(np.uint8)
     m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)))
+    if grow and m.any():
+        # grow only from the person's main body, never from stray specks of lighting change
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+        body = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
+        near = cv2.dilate(body, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * grow + 1, 2 * grow + 1))).astype(bool)
+        m = (m.astype(bool) | (near & (d > grow_thr) & zone)).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close, close)))
     # fill holes (a hoodie the same colour as the wall behind it still counts as hoodie)
     inv = (1 - m).astype(np.uint8)
     h, w = m.shape
@@ -686,6 +709,7 @@ class LayerCompositor:
         for path in cut_cols:
             self.band |= np.abs(cols - path[:, None]) < int(0.10 * w)
         # Default depth: the middle character at the back, the outer ones in front.
+        self.explicit_depth = bool(depth)
         self.depth = depth or sorted(names, key=lambda n: -abs(plan.char(n).center - 0.5))[::-1]
         self.kd = np.ones((2 * dilate + 1, 2 * dilate + 1), np.uint8)
         self.soften = soften
@@ -736,7 +760,11 @@ class LayerCompositor:
             if n in self.medians and isinstance(scen, np.ndarray) and scen.any():
                 scen = scen & (np.abs(small[n] - self.medians[n]).sum(-1) < 40)
             exclude = self.props[n] | scen
-            b = _person_mask(small[n], self.plate, self.zone[n] & ~exclude)
+            # Stand-behind: whoever is in front gets a much more solid outline - a dark
+            # shirt against a dark cabinet must never let the clone behind show through.
+            front = self.explicit_depth and n == self.depth[-1]
+            b = _person_mask(small[n], self.plate, self.zone[n] & ~exclude, close=31 if front else 11,
+                             grow=12 if front else 0)
             body[n] = b
         # People on top of the background, in depth order (later = in front).
         person = np.full((self.h, self.w), -1, np.int32)
@@ -845,8 +873,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
     import cv2
 
     plate, props, scenery, medians, light = background_plate(raw, plan.chars, plan.gains, (W // _DS, H // _DS),
-                                                             plan.counter_y)
-    comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth)
+                                                             plan.counter_y, empty=plan.empty)
+    comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth or plan.depth)
     # full-resolution lighting correction per take (global gain x smooth local field)
     light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
 
