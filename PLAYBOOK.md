@@ -70,3 +70,14 @@ python tools/ingest.py work/raw/<file>.MOV work/V          # proxy, transcript, 
 - A pick's end landing inside a word gets extended to finish it, which can pull in the
   start of the next word ("expensive, but"). End the pick just before the next word.
 - Takes are usually filmed twice; the second is normally cleaner.
+
+## Stand-behind format
+
+One clone stands close to the camera and talks or demonstrates; the other stands
+behind, over his shoulder, and is just part of the background. Set in cfg.json:
+`"mode": "stand_behind"`, `"depth": ["<back>", "<front>"]`, and `"empty": [lo, hi]` if
+the clip shows the empty room for a moment. The front clone is cut out with a person
+segmentation model (models/selfie_segmenter.tflite) and laid over the back clone's
+whole frame, so the edge is always clean. Pick framings with `"framing"` so a tight
+shot on the back clone never slices the front clone's face, and hand-pick listening
+footage with `"listen"` (the front clone busy with the product is fine).

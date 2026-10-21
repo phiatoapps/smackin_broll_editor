@@ -76,6 +76,7 @@ plan.counter_y = cfg.get("counter_y", 0.55)
 plan.label_changes = cfg.get("label_changes", {})
 plan.empty = cfg.get("empty")      # [lo, hi] seconds of empty room, if the clip has some
 plan.depth = cfg.get("depth")      # ["B", "A"]: back to front (stand-behind format)
+plan.mode = cfg.get("mode", "mirror")  # "stand_behind": front clone cut out over the other take
 plan.gains = ms.match_gains(P, chars)
 print(os.path.basename(D), ms.tighten(plan, env, thr=0.015, words=words))
 # hand-checked word endings the envelope misses (a soft final word): {"text prefix": raw end}

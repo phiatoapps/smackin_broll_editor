@@ -101,6 +101,10 @@ class MPlan:
     empty: list[float] | None = None
     # Layer order, back to front (stand-behind: the one behind first). None = automatic.
     depth: list[str] | None = None
+    # "mirror": clones side by side, layered by comparing against the empty room.
+    # "stand_behind": the last character in `depth` is always in front, cut out with a
+    # person-segmentation model; everyone else is simply the background footage.
+    mode: str = "mirror"
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -832,6 +836,59 @@ class LayerCompositor:
         return al, stats
 
 
+# ---------------------------------------------------------------- stand-behind matte
+
+
+class _FrontMatte:
+    """Soft cutout of the person nearest the camera (stand-behind format): MediaPipe's
+    selfie segmenter, edges refined with a guided filter against the frame itself (so the
+    edge follows hair and shirt, not the model's coarse 256px grid), steadied over time."""
+
+    def __init__(self):
+        import mediapipe as mp
+        from mediapipe.tasks import python as mpt
+        from mediapipe.tasks.python import vision
+
+        model = Path(__file__).resolve().parent / "models" / "selfie_segmenter.tflite"
+        self.mp = mp
+        self.seg = vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
+            base_options=mpt.BaseOptions(model_asset_path=str(model)), output_confidence_masks=True))
+        self.prev: np.ndarray | None = None
+
+    def reset(self) -> None:
+        self.prev = None
+
+    def __call__(self, frame: np.ndarray, plate: np.ndarray | None = None) -> np.ndarray:
+        import cv2
+
+        H, W = frame.shape[:2]
+        img = np.ascontiguousarray(np.clip(frame, 0, 255).astype(np.uint8))
+        r = self.seg.segment(self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=img))
+        conf = np.squeeze(r.confidence_masks[0].numpy_view()).astype(np.float32)
+        conf = cv2.resize(conf, (W, H), interpolation=cv2.INTER_LINEAR)
+        hard = np.clip((conf - 0.35) / 0.3, 0, 1)                      # decisive, no grey fog
+        if plate is not None:
+            # what the model leaves out right next to the person but clearly isn't empty
+            # room (a cup they hold, the shirt behind it) is theirs too
+            ph, pw = plate.shape[:2]
+            small = cv2.resize(img, (pw, ph), interpolation=cv2.INTER_AREA).astype(np.float32)
+            diff = (np.abs(small - plate).sum(-1) > 60).astype(np.uint8)
+            diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+            near = cv2.dilate((cv2.resize(hard, (pw, ph)) > 0.5).astype(np.uint8),
+                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17)))
+            extra = cv2.resize((diff & near).astype(np.float32), (W, H), interpolation=cv2.INTER_LINEAR)
+            hard = np.maximum(hard, extra)
+        hard = cv2.morphologyEx(hard, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25)))
+        guide = cv2.resize(img, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
+        a = cv2.ximgproc.guidedFilter(guide, cv2.resize(hard, (W // 2, H // 2)), 8, 1e-3)
+        a = np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
+        a = np.clip((a - 0.15) / 0.7, 0, 1)                             # firm core, short soft edge
+        if self.prev is not None:
+            a = 0.6 * a + 0.4 * self.prev                               # no edge shimmer frame to frame
+        self.prev = a
+        return a
+
+
 # ---------------------------------------------------------------- rendering
 
 
@@ -916,6 +973,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
             chunks.append(cur)
 
         def encode(seg_ids: list[int], path: Path, rep_path: Path | None) -> list[dict]:
+            matte = _FrontMatte() if plan.mode == "stand_behind" else None  # per process
+            front = (plan.depth or names)[-1]
             done = sum(nframes[:seg_ids[0]])
             report: list[dict] = []
             exp_state: dict = {}
@@ -952,6 +1011,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                         st, rate = seg.listen[c.name]
                         readers[c.name] = _Reader(raw, st, n, W, H, rate)
                 comp.reset()
+                if matte is not None:
+                    matte.reset()
                 exp_state.clear()  # new footage at a cut: match its exposure fresh, no lag
                 labels = labels_for(seg.line)
                 for fi in range(n):
@@ -960,12 +1021,19 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                     eg = comp.exposure(small, exp_state)
                     fr = {k: np.clip(v * eg[k], 0, 255) for k, v in fr.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
-                    al, st = comp.alphas(small)
-                    sd = comp.seam_delta(small)
-                    out = np.zeros_like(fr[names[0]])
-                    for k in names:
-                        a = cv2.resize(al[k], (W, H), interpolation=cv2.INTER_LINEAR)[..., None]
-                        out += a * fr[k]
+                    if matte is not None:
+                        # stand-behind: front person over the other take's whole frame
+                        a = matte(fr[front], comp.plate)[..., None]
+                        back = next(k for k in names if k != front)
+                        out = a * fr[front] + (1 - a) * fr[back]
+                        st, sd = {k: (0, 0.0) for k in names}, 0.0
+                    else:
+                        al, st = comp.alphas(small)
+                        sd = comp.seam_delta(small)
+                        out = np.zeros_like(fr[names[0]])
+                        for k in names:
+                            a = cv2.resize(al[k], (W, H), interpolation=cv2.INTER_LINEAR)[..., None]
+                            out += a * fr[k]
                     report.append({"t": round(done / FPS, 2), "line": seg.line, "speaker": seg.char,
                                    **{f"ghost_{k}": v[0] for k, v in st.items()},
                                    **{f"covered_{k}": round(v[1], 3) for k, v in st.items()},
