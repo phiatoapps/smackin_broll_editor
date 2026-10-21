@@ -1,0 +1,18 @@
+{"A": [15, 147, 0.25], "B": [180, 240, 0.80],
+ "labels": {"A": "2027", "B": "1990s"},
+ "picks": [
+  [0, "U", 20.70, 22.96, false, "I'm what you scrub with in the shower.", 184.50, 186.27],
+  [1, "A", 24.73, 26.18, false, "Uh, how old are you?"],
+  [2, "B", 191.33, 193.36, false, "Uh, I don't know, he got me at the drugstore."],
+  [3, "A", 28.92, 29.28, false, "When?"],
+  [4, "B", 197.67, 199.51, false, "Honestly, I genuinely do not know."],
+  [5, "A", 49.09, 51.85, false, "I think it's time to make a change because I'm a Scrub Daddy."],
+  [6, "A", 53.77, 56.81, false, "The first thing that they've ever made that's not for dishes."],
+  [7, "A", 59.78, 61.41, false, "I go on your hand like a glove."],
+  [8, "A", 83.99, 87.35, false, "And now this is exfoliating while also sudsing up."],
+  [9, "A", 109.79, 117.26, false, "And before anyone does something not so smart, this is not the kitchen Scrub Daddy. Do not use that. This is meant for the shower."],
+  [10, "B", 229.22, 231.22, false, "Okay, but I know that had to be expensive."],
+  [11, "A", 128.11, 131.66, false, "Honestly it wasn't. And right now you get the Harry's collab."],
+  [12, "A", 134.13, 135.81, false, "This thing smells so good."],
+  [13, "A", 141.74, 144.06, false, "So if you want to grab one, click the link in this video."]
+ ]}
