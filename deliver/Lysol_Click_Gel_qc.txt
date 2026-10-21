@@ -1,0 +1,11 @@
+pauses >= 0.15s: 2 [(0.04, 0.15), (36.35, 0.16)]
+black/frozen: 0 []
+seam colour mismatch (0-255 per channel): max 3.7, mean 1.8 (under ~6 is invisible), frames over 6: 0
+A: see-through px max 106, covered max 0.00
+B: see-through px max 57, covered max 0.11
+cuts with sound right past them (check for clipped words): 15
+  out 37.73s start level 0.267 | price too, and you get
+  out 44.16s start level 0.169 | last long, so if
+grading sheet: work/V/final_grade.png
+segments needing a fix: 0
+readback: I'm how you clean the toilet. Right, you grab me, you scrub, you flush, and you put it back. Put you back where? In the holder? So you live next to the toilet in a cup of toilet water. No, see, it's a holder. You're not a toilet brush, you're pretty much a second toilet. But check this out. I click into the bowl, under the rim, and then I don't get touched again. Lysol says you get up to 12 week of freshness in this gel. So it prevents rings, neutralizes odors. 12 weeks? 24 of them total, six count in each pack and you get four packs. Yeah, when you buy this, you're not buying it again for years. Okay, well, at least I'm cheap. You get thrown the trash about every three months and replaced. And this bundle right here is a TikTok exclusive. You get two cents. So if you want your toilets cleaner a little bit easier, I click link in this video.

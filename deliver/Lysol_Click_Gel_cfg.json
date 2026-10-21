@@ -1,0 +1,20 @@
+{"A": [0, 152, 0.27], "B": [152, 300.2, 0.71],
+ "labels": {"A": "GEN Z", "B": "BOOMER"},
+ "picks": [
+  [0, "U", 53.5, 55.4, false, "I'm how you clean a toilet.", 202.0, 204.0],
+  [1, "B", 212.05, 215.4, false, "Right, you grab me, you scrub, you flush, and you put it back."],
+  [2, "A", 61.55, 63.2, false, "Put you back where?"],
+  [3, "B", 225.1, 226.6, false, "In the holder?"],
+  [4, "A", 65.1, 69.1, false, "So you live next to the toilet in a cup of toilet water."],
+  [5, "B", 234.7, 236.8, false, "You see, it's a holder."],
+  [6, "A", 73.5, 76.3, false, "You're not a toilet brush, you're pretty much a second toilet."],
+  [7, "A", 79.2, 93.9, false, "But check this out. I click into the bowl, under the rim, and then I don't get touched again. Lysol says you get up to 12 weeks of freshness in this gel,"],
+  [8, "A", 96.4, 99.0, false, "so it prevents rings, neutralizes odors."],
+  [9, "B", 265.1, 266.4, false, "12 weeks?"],
+  [10, "A", 109.6, 113.85, false, "24 of them total, 6 count in each pack and you get 4 packs."],
+  [11, "A", 120.6, 123.0, false, "Yeah, when you buy this, you're not buying it again for years."],
+  [12, "B", 277.35, 278.8, false, "Okay, well, at least I'm cheap."],
+  [13, "A", 129.42, 132.35, false, "You get thrown in the trash about every three months and replaced."],
+  [14, "A", 137.9, 141.95, false, "And this bundle right here is a TikTok exclusive, you get two scents."],
+  [15, "A", 146.55, 150.4, false, "If you want your toilets cleaner a little easier, click the link in this video."]
+ ]}
