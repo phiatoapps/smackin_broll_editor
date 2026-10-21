@@ -1,0 +1,22 @@
+{"A": [60, 208, 0.18], "B": [255, 336, 0.78],
+ "labels": {"A": "GEN Z", "B": "GEN X"},
+ "band": [0.42, 0.52],
+ "picks": [
+  [0, "U", 66.5, 68.2, false, "I'm the superior pickleball paddle.", 258.85, 261.0],
+  [1, "B", 264.48, 265.10, false, "Big deal."],
+  [2, "A", 70.80, 72.05, false, "What's your face made of?"],
+  [3, "B", 274.45, 275.8, false, "Plastic, the carbon stuff?"],
+  [4, "A", 79.85, 82.3, false, "This is aramid and carbon fiber."],
+  [5, "A", 87.38, 95.29, false, "So it's 16mm core with three foam rings around the honeycomb. So it's not just honeycomb, it's the foam rings around it too."],
+  [6, "B", 296.5, 297.95, false, "Okay, I have honeycomb."],
+  [7, "A", 98.8, 102.3, false, "You also have like an edge taped on. Listen to this."],
+  [8, "A", 103.1, 106.2, false, "You were assembled, I was formed. One piece."],
+  [9, "A", 140.75, 141.78, false, "Mine came with a cover,"],
+  [10, "A", 143.80, 146.1, false, "and it actually came with the grip already fitted."],
+  [11, "B", 319.75, 320.6, false, "What? All of that?"],
+  [12, "B", 321.5, 322.45, false, "Okay, it had to be expensive."],
+  [13, "A", 166.36, 168.0, false, "You're elongated too, right?"],
+  [14, "B", 331.95, 333.6, false, "I'm whatever shape they have."],
+  [15, "A", 187.05, 189.75, false, "Plus, of course, it's USA pickleball approved."],
+  [16, "A", 200.86, 206.08, false, "So if you want one of the best pickleball paddles on the market with the Ultra CPX, I'd grab yours in this link"]
+ ]}

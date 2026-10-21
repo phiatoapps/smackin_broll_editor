@@ -1,0 +1,14 @@
+pauses >= 0.15s: 1 [(10.1, 0.15)]
+black/frozen: 0 []
+seam colour mismatch (0-255 per channel): max 3.2, mean 0.8 (under ~6 is invisible), frames over 6: 0
+A: see-through px max 39, covered max 0.00
+B: see-through px max 47, covered max 0.01
+cuts with sound right past them (check for clipped words): 17
+  out  2.59s end   level 0.058 | big deal? I'm
+  out 25.38s end   level 0.142 | a cover, it's actually
+  out 25.38s start level 0.360 | gold, and it
+  out 30.19s start level 0.183 | you were and you're
+  out 41.42s end   level 0.149 | this link before they
+grading sheet: work/V/final_grade.png
+segments needing a fix: 0
+readback: I'm the superior pickleball paddle. Big deal. Oh, what's your face made of? Plastic, the carbon stuff. This is armid and carbon fiber. So it's 16 millimeter core with three foam rings around the honeycomb. So it's not just honeycomb. It's the foam rings around it too. Okay. I have honeycomb. You also have like an edge taped on listen to this. You were assembled. I was formed one piece. Mine came with a cover and it actually came with the grip already fitted. What all that? Okay it had to be expensive. And you're elongated too right? I'm whatever shape they have. Plus of course it's USA pickleball approved. So if you want one of the best pickleball paddles on the market with the Ultra CPX, I'd grab yours in this link.
