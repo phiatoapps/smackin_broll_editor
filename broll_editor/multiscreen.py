@@ -24,6 +24,7 @@ So every frame is layered instead:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from dataclasses import asdict, dataclass, field
@@ -829,8 +830,9 @@ class _Reader:
 def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int = 1080, height: int = 1920,
                  zoom: float = 1.6, label_y: float = 0.39, label_size: int = 52,
                  depth: list[str] | None = None, crf: int = 20, preset: str = "medium",
-                 report_path: str | Path | None = None,
+                 report_path: str | Path | None = None, workers: int | None = None,
                  on_progress: Callable[[float], None] | None = None) -> Path:
+    """workers: processes rendering chunks of segments in parallel (default: one per CPU)."""
     raw, output = Path(raw), Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     W, H = width, height
@@ -844,8 +846,6 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
     comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth)
     # full-resolution lighting correction per take (global gain x smooth local field)
     light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
-    report: list[dict] = []
-    exp_state: dict = {}
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -855,37 +855,55 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 from PIL import Image
 
                 png = tmp / f"label_{c.name}.png"
-                _label_png(png, c.label, label_size)
+                _label_png(png, c.label, max(12, round(label_size * W / 1080)))  # same look at draft size
                 img = np.asarray(Image.open(png).convert("RGBA"), np.float32)
                 labels[c.name] = img
 
-        video = tmp / "video.mp4"
-        enc = subprocess.Popen(
-            ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
-             "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", preset, "-crf", str(crf),
-             "-pix_fmt", "yuv420p", str(video)],
-            stdin=subprocess.PIPE,
-        )
-        done = 0
-        nframes_total = sum(round(s.duration * FPS) for s in plan.segments)
-        for seg in plan.segments:
-            n = max(1, round(seg.duration * FPS))
-            spk = plan.char(seg.char)
-            if seg.zoom:
-                r = _Reader(raw, seg.start, n, W, H)
-                zw, zh = int(W / zoom), int(H / zoom)
-                x0 = int(min(max(spk.center * W - zw / 2, 0), W - zw))
-                y0 = int(min(max(H * 0.2 - zh / 2, 0), H - zh))
-                for _ in range(n):
-                    f = r.read().astype(np.float32) * light_full[spk.name]
-                    crop = np.clip(f[y0:y0 + zh, x0:x0 + zw], 0, 255).astype(np.uint8)
-                    from PIL import Image
+        # Segments are independent (every cut resets the compositor's state), so the
+        # video is rendered in contiguous chunks of segments, one process per chunk,
+        # and the chunks are joined without re-encoding.
+        nframes = [max(1, round(s.duration * FPS)) for s in plan.segments]
+        nframes_total = sum(nframes)
+        workers = max(1, min(workers or os.cpu_count() or 1, len(plan.segments)))
+        chunks, cur, acc = [], [], 0
+        for i, n in enumerate(nframes):
+            cur.append(i)
+            acc += n
+            if acc >= nframes_total * (len(chunks) + 1) / workers and len(chunks) < workers - 1:
+                chunks.append(cur)
+                cur = []
+        if cur:
+            chunks.append(cur)
 
-                    out = np.asarray(Image.fromarray(crop).resize((W, H), Image.LANCZOS))
-                    enc.stdin.write(out.tobytes())
-                    done += 1
-                r.close()
-            else:
+        def encode(seg_ids: list[int], path: Path, rep_path: Path | None) -> list[dict]:
+            done = sum(nframes[:seg_ids[0]])
+            report: list[dict] = []
+            exp_state: dict = {}
+            enc = subprocess.Popen(
+                ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
+                 "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", preset, "-crf", str(crf),
+                 "-pix_fmt", "yuv420p", str(path)],
+                stdin=subprocess.PIPE,
+            )
+            for si in seg_ids:
+                seg = plan.segments[si]
+                n = nframes[si]
+                spk = plan.char(seg.char)
+                if seg.zoom:
+                    r = _Reader(raw, seg.start, n, W, H)
+                    zw, zh = int(W / zoom), int(H / zoom)
+                    x0 = int(min(max(spk.center * W - zw / 2, 0), W - zw))
+                    y0 = int(min(max(H * 0.2 - zh / 2, 0), H - zh))
+                    for _ in range(n):
+                        f = r.read().astype(np.float32) * light_full[spk.name]
+                        crop = np.clip(f[y0:y0 + zh, x0:x0 + zw], 0, 255).astype(np.uint8)
+                        from PIL import Image
+
+                        out = np.asarray(Image.fromarray(crop).resize((W, H), Image.LANCZOS))
+                        enc.stdin.write(out.tobytes())
+                        done += 1
+                    r.close()
+                    continue
                 readers = {}
                 for c in plan.chars:
                     if c.name == seg.char:
@@ -931,17 +949,44 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                                 continue  # their spot is out of frame in this framing
                             x0 = int(min(max(cx - lw / 2, 0), W - lw))
                             y0 = int(cy - lh / 2)
-                            al = lab[..., 3:4] / 255
-                            out[y0:y0 + lh, x0:x0 + lw] = out[y0:y0 + lh, x0:x0 + lw] * (1 - al) + lab[..., :3] * al
+                            la = lab[..., 3:4] / 255
+                            out[y0:y0 + lh, x0:x0 + lw] = out[y0:y0 + lh, x0:x0 + lw] * (1 - la) + lab[..., :3] * la
                     enc.stdin.write(np.clip(out, 0, 255).astype(np.uint8).tobytes())
                     done += 1
                 for r in readers.values():
                     r.close()
+                if on_progress and len(chunks) == 1:
+                    on_progress(0.9 * done / nframes_total)
+            enc.stdin.close()
+            if enc.wait() != 0:
+                raise RuntimeError("video encode failed")
+            if rep_path:
+                rep_path.write_text(json.dumps(report))
+            return report
+
+        video = tmp / "video.mp4"
+        report: list[dict] = []
+        if len(chunks) == 1:
+            report = encode(chunks[0], video, None)
+        else:
+            import multiprocessing as mp
+
+            ctx = mp.get_context("fork")  # children share the plate/compositor, nothing pickled
+            parts = [(ids, tmp / f"part{i}.mp4", tmp / f"part{i}.json") for i, ids in enumerate(chunks)]
+            procs = [ctx.Process(target=encode, args=p) for p in parts]
+            for pr in procs:
+                pr.start()
+            for pr in procs:
+                pr.join()
+            if any(pr.exitcode != 0 for pr in procs):
+                raise RuntimeError("video encode failed")
+            (tmp / "parts.txt").write_text("".join(f"file '{p[1]}'\n" for p in parts))
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(tmp / "parts.txt"),
+                            "-c", "copy", str(video)], check=True)
+            for p in parts:
+                report += json.loads(p[2].read_text())
             if on_progress:
-                on_progress(0.9 * done / nframes_total)
-        enc.stdin.close()
-        if enc.wait() != 0:
-            raise RuntimeError("video encode failed")
+                on_progress(0.9)
 
         # Audio: each segment's speaker audio, exactly as long as its video. Sliced
         # by sample in numpy (an ffmpeg graph mixing far-apart trims of one input
