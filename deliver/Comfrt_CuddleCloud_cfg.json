@@ -1,0 +1,21 @@
+{"A": [150, 236, 0.29], "B": [25, 118, 0.76],
+ "labels": {"A": "2027", "B": "2026"},
+ "picks": [
+  [0, "U", 158.45, 160.85, false, "I'm the blanket on the back of your couch.", 31.75, 33.7],
+  [1, "B", 43.85, 44.40, false, "Correct."],
+  [2, "B", 50.04, 54.6, false, "He pulls me over and watches TV all night, doesn't really cover my feet and then slides off on the floor."],
+  [3, "A", 173.6, 175.5, false, "You slide off the floor every night."],
+  [4, "B", 59.7, 60.9, false, "Hey, go ahead, pick me up."],
+  [5, "A", 178.8, 179.55, false, "I'd rather not."],
+  [6, "B", 68.3, 69.7, false, "What's so special about you?"],
+  [7, "A", 181.55, 185.5, false, "This blanket right here by Comfrt is 20 pounds."],
+  [8, "A", 187.05, 189.0, false, "And here's the part that nobody says out loud."],
+  [9, "A", 189.55, 193.1, false, "Most weighted blankets are a cover with the weight poured inside it."],
+  [10, "A", 194.8, 198.4, false, "Shake one, you can hear it move. I am actually hand knitted."],
+  [11, "A", 201.45, 203.05, false, "So that means the weight's in the yarn."],
+  [12, "A", 204.7, 207.3, false, "There's nothing in me to shift into the corners."],
+  [13, "B", 93.6, 96.05, false, "Okay, well I'm machine washable and I was cheap."],
+  [14, "A", 210.9, 213.05, false, "You're a bath towel with ambitions."],
+  [15, "B", 101.6, 102.6, false, "All right, that's not cool."],
+  [16, "A", 215.45, 221.45, false, "There's multiple colors. I love this one right here to match the Christmas and the winter theme, but get whichever one you want."]
+ ]}

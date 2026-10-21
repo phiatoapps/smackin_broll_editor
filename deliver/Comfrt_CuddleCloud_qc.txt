@@ -1,0 +1,14 @@
+pauses >= 0.15s: 1 [(16.61, 0.15)]
+black/frozen: 0 []
+seam colour mismatch (0-255 per channel): max 3.2, mean 1.1 (under ~6 is invisible), frames over 6: 0
+A: see-through px max 191, covered max 0.11
+B: see-through px max 71, covered max 0.01
+cuts with sound right past them (check for clipped words): 13
+  out  3.42s end   level 0.086 | he
+  out  3.42s start level 0.092 | yeah he pulls me
+  out 17.67s end   level 0.031 | pounds.
+  out 27.51s end   level 0.044 | knitted
+grading sheet: work/V/final_grade.png
+out  13.5- 17.7 listener B src 70.2: facing 71%, away 0%  weak
+segments needing a fix: 1
+readback: I'm the blanket on the back of your couch. Correct. He pulls me over and watches TV all night. Doesn't really cover my feet and then slides off on the floor. You slide off the floor every night. Hey, go ahead. Pick me up. I'd rather not. What's the special about you? This blanket right here by comfort is 20 pounds. And here's the part that nobody says out loud. Most way blankets are a cover with the weight poured inside it. Shake one. You can hear it move. I am actually hand knitted. So that means the weights in the yarn. There's nothing in me to shift into the corners. Okay, well I'm machine washable and I was cheap. You're a bath towel with ambitions. Alright, that's not cool. There's multiple colors. I love this one right here to match the Christmas and the winter theme, but get whichever one you want.
