@@ -2,6 +2,7 @@
 
 cfg.json: {"A": [lo, hi, center], "B": [lo, hi, center],
            "labels": {"A": "2009", "B": "2027"},            (optional)
+           "label_changes": {"B": [[line, "NEW LABEL"]]},   (optional: label text from that line on)
            "ends": {"text prefix": raw_end},                 (optional, soft last words)
            "band": [lo, hi],    (optional, default [0.30, 0.92]: where both clones may
                                  appear; narrow it when they never cross the middle)
@@ -69,6 +70,7 @@ for k, b_start in unison.items():
     plan.segments[k].unison = True
     plan.segments[k].listen["B"] = [b_start, 1.0]
 plan.counter_y = 0.55
+plan.label_changes = cfg.get("label_changes", {})
 plan.gains = ms.match_gains(P, chars)
 print(os.path.basename(D), ms.tighten(plan, env, thr=0.015, words=words))
 # hand-checked word endings the envelope misses (a soft final word): {"text prefix": raw end}

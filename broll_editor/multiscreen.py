@@ -93,6 +93,9 @@ class MPlan:
     # stay put above it without touching it (a moved blanket, a picture) are scenery
     # behind the people. None = treat everything that stays put as a prop.
     counter_y: float | None = None
+    # Label changes mid-video: {name: [[line, new label], ...]} - from that script
+    # line on, the character's label reads the new text (e.g. "PRO" pops on).
+    label_changes: dict[str, list] = field(default_factory=dict)
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -849,15 +852,24 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        labels = {}
-        for c in plan.chars:
-            if c.label:
-                from PIL import Image
+        from PIL import Image
 
-                png = tmp / f"label_{c.name}.png"
-                _label_png(png, c.label, max(12, round(label_size * W / 1080)))  # same look at draft size
-                img = np.asarray(Image.open(png).convert("RGBA"), np.float32)
-                labels[c.name] = img
+        def label_img(text: str, key: str) -> np.ndarray:
+            png = tmp / f"label_{key}.png"
+            _label_png(png, text, max(12, round(label_size * W / 1080)))  # same look at draft size
+            return np.asarray(Image.open(png).convert("RGBA"), np.float32)
+
+        base_labels = {c.name: label_img(c.label, c.name) for c in plan.chars if c.label}
+        changes = {n: [(int(ln), label_img(t, f"{n}_{k}")) for k, (ln, t) in enumerate(sorted(ch, key=lambda x: x[0]))]
+                   for n, ch in plan.label_changes.items()}
+
+        def labels_for(line: int) -> dict[str, np.ndarray]:
+            out = dict(base_labels)
+            for n, ch in changes.items():
+                for ln, img in ch:
+                    if line >= ln:
+                        out[n] = img
+            return out
 
         # Segments are independent (every cut resets the compositor's state), so the
         # video is rendered in contiguous chunks of segments, one process per chunk,
@@ -913,6 +925,7 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                         readers[c.name] = _Reader(raw, st, n, W, H, rate)
                 comp.reset()
                 exp_state.clear()  # new footage at a cut: match its exposure fresh, no lag
+                labels = labels_for(seg.line)
                 for fi in range(n):
                     fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}

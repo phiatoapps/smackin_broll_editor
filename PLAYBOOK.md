@@ -10,9 +10,12 @@ them into one frame. Read README.md for the tools; this file is the job.
 1. **Hook:** open on both clones in frame (the tools do a quick pull-out to the wide shot).
 2. **Unison opening (Clone Argument format):** both clones say the first line together:
    a `"U"` pick with both takes of that line.
-3. **Labels** over each clone for the whole video, from the script doc. The product
-   ("your product", 🅱️ in the doc) always gets 2027; the old way gets the other label.
-   Match the label to whichever side that clone actually stands on.
+3. **Labels** over each clone for the whole video. Use the label pair your task gives
+   you (the user likes creative pairs that hit several audiences: years, generations
+   like GEN X vs GEN Z, BOOMER vs GEN Z); otherwise the doc's pair. The product (🅱️ in
+   the doc) gets the newer one. Match each label to the side that clone actually
+   stands on. A label that changes mid-video ("PRO" pops on) is
+   `"label_changes": {"B": [[line, "NEW TEXT"]]}` in cfg.json.
 4. **No dead air.** Not even 0.3s. QC must show no pauses over ~0.16s.
 5. **Never cut off a word** and never leak the first sound of the next word.
 6. **Listeners face the speaker.** Never looking the other way (the gaze tools handle it; verify).
