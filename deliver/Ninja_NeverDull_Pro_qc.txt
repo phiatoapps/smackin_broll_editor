@@ -1,0 +1,15 @@
+pauses >= 0.15s: 4 [(14.43, 0.15), (16.23, 0.15), (21.26, 0.15), (27.92, 0.16)]
+black/frozen: 0 []
+seam colour mismatch (0-255 per channel): max 5.4, mean 2.5 (under ~6 is invisible), frames over 6: 0
+A: see-through px max 123, covered max 0.00
+B: see-through px max 89, covered max 0.11
+cuts with sound right past them (check for clipped words): 18
+  out  1.79s end   level 0.130 | double knives wait
+  out  1.79s start level 0.038 | 
+  out 23.39s end   level 0.037 | pieces
+  out 36.08s start level 0.127 | Take
+  out 39.47s start level 0.034 | the see that's
+  out 52.00s start level 0.322 | So you're just
+grading sheet: work/V/final_grade.png
+segments needing a fix: 0
+readback: I got the Ninja Nevernore knives. Wait, wait, which one did you get? Uh, the pro? The what? The pro. OK, OK. German stainless steel. Yes, German stainless steel knives. Sharpener built into the block like you just swiped a lever. Exactly. Swipe the lever. OK, so we're the same. I don't think we are. Do you have a serrated knife? The what? So this is 10 pieces, including scissors, four steak knives, a paring knife, a chef knife, and my new favorite addition to the set a serrated blade. Great for cutting bread. Now do me a favor and take your sharpener off. Take it what? Off the block. Take it off. I can't. See that's the beauty of this. Even steak knives take them off too. The whole section comes off. So you take up less counter than me. Yeah, only on the days that I want to. Ninja says it's up to 45% more counter space when you take off both pieces. You're just a knife block. I'm a whole kit.
