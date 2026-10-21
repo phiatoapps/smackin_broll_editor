@@ -840,23 +840,24 @@ class LayerCompositor:
 
 
 class _FrontMatte:
-    """Soft cutout of the person nearest the camera (stand-behind format): MediaPipe's
-    selfie segmenter, edges refined with a guided filter against the frame itself (so the
-    edge follows hair and shirt, not the model's coarse 256px grid), steadied over time."""
+    """Cutout of the person nearest the camera (stand-behind format): MediaPipe's
+    multiclass selfie segmenter (person = not background), a narrow confidence band so the
+    edge is decisive, holes filled, then a guided filter against the frame itself so the
+    edge follows hair and shirt exactly instead of the model's coarse 256px grid.
+    No smoothing over time: that drags a moving hand into a see-through smear."""
 
     def __init__(self):
         import mediapipe as mp
         from mediapipe.tasks import python as mpt
         from mediapipe.tasks.python import vision
 
-        model = Path(__file__).resolve().parent / "models" / "selfie_segmenter.tflite"
+        model = Path(__file__).resolve().parent / "models" / "selfie_multiclass_256x256.tflite"
         self.mp = mp
         self.seg = vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
             base_options=mpt.BaseOptions(model_asset_path=str(model)), output_confidence_masks=True))
-        self.prev: np.ndarray | None = None
 
     def reset(self) -> None:
-        self.prev = None
+        pass
 
     def __call__(self, frame: np.ndarray, plate: np.ndarray | None = None) -> np.ndarray:
         import cv2
@@ -864,29 +865,42 @@ class _FrontMatte:
         H, W = frame.shape[:2]
         img = np.ascontiguousarray(np.clip(frame, 0, 255).astype(np.uint8))
         r = self.seg.segment(self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=img))
-        conf = np.squeeze(r.confidence_masks[0].numpy_view()).astype(np.float32)
-        conf = cv2.resize(conf, (W, H), interpolation=cv2.INTER_LINEAR)
-        hard = np.clip((conf - 0.35) / 0.3, 0, 1)                      # decisive, no grey fog
+        person = 1 - np.squeeze(r.confidence_masks[0].numpy_view()).astype(np.float32)
+        h, w = H // 2, W // 2
+        person = cv2.resize(person, (w, h), interpolation=cv2.INTER_LINEAR)
+        hard = (person > 0.5).astype(np.uint8)
+        # fill holes inside the silhouette (never part of the room behind him)
+        inv = 1 - hard
+        ff, mask = inv.copy(), np.zeros((h + 2, w + 2), np.uint8)
+        for x in range(0, w, 16):
+            for y in (0, h - 1):
+                if ff[y, x]:
+                    cv2.floodFill(ff, mask, (x, y), 0)
+        for y in range(0, h, 16):
+            for x in (0, w - 1):
+                if ff[y, x]:
+                    cv2.floodFill(ff, mask, (x, y), 0)
+        soft = np.maximum(np.clip((person - 0.4) / 0.2, 0, 1), ff.astype(np.float32))
         if plate is not None:
-            # what the model leaves out right next to the person but clearly isn't empty
-            # room (a cup they hold, the shirt behind it) is theirs too
+            # things he holds (a cup) aren't "person" to the model: take what touches his
+            # silhouette and clearly isn't the empty room (after matching exposure)
             ph, pw = plate.shape[:2]
-            small = cv2.resize(img, (pw, ph), interpolation=cv2.INTER_AREA).astype(np.float32)
-            diff = (np.abs(small - plate).sum(-1) > 60).astype(np.uint8)
-            diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-            near = cv2.dilate((cv2.resize(hard, (pw, ph)) > 0.5).astype(np.uint8),
-                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17)))
-            extra = cv2.resize((diff & near).astype(np.float32), (W, H), interpolation=cv2.INTER_LINEAR)
-            hard = np.maximum(hard, extra)
-        hard = cv2.morphologyEx(hard, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25)))
-        guide = cv2.resize(img, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
-        a = cv2.ximgproc.guidedFilter(guide, cv2.resize(hard, (W // 2, H // 2)), 8, 1e-3)
-        a = np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
-        a = np.clip((a - 0.15) / 0.7, 0, 1)                             # firm core, short soft edge
-        if self.prev is not None:
-            a = 0.6 * a + 0.4 * self.prev                               # no edge shimmer frame to frame
-        self.prev = a
-        return a
+            sm = cv2.resize(img, (pw, ph), interpolation=cv2.INTER_AREA).astype(np.float32)
+            body = cv2.resize(hard, (pw, ph), interpolation=cv2.INTER_NEAREST)
+            far = cv2.dilate(body, np.ones((31, 31), np.uint8)) == 0
+            if far.sum() > 500:
+                g = np.median(sm[far], axis=0) / np.maximum(np.median(plate[far], axis=0), 1)
+                diff = (np.abs(sm - plate * g).sum(-1) > 60).astype(np.uint8)
+                diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+                near = cv2.dilate(body, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41)))
+                cand = diff & near
+                n, lab = cv2.connectedComponents(cand | body, connectivity=8)
+                touching = np.unique(lab[body > 0])
+                held = np.isin(lab, touching[touching > 0]) & (cand > 0)
+                soft = np.maximum(soft, cv2.resize(held.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR))
+        guide = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+        a = cv2.ximgproc.guidedFilter(guide, soft, 6, 1e-4)
+        return np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
 
 
 # ---------------------------------------------------------------- rendering
