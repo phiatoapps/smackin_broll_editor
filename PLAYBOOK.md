@@ -82,6 +82,12 @@ whole frame, so the edge is always clean. Pick framings with `"framing"` so a ti
 shot on the back clone never slices the front clone's face, and hand-pick listening
 footage with `"listen"` (the front clone busy with the product is fine).
 
+## Split screen only for the opener (when the user asks for it)
+
+Some videos use the split screen only for the intro lines and the unison line; every
+line after the unison is a solo shot of whoever is speaking: mark those picks "A!"/"B!".
+Keep the unison line wide, and give the solo lines a few `"framing"` jump zooms.
+
 ## Messy clips: other layouts
 
 Not every clip is a clean left/right split. Check `sides.txt` and a frame tile first:
