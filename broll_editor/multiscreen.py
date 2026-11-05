@@ -49,6 +49,12 @@ class Character:
     center: float      # where they stand, fraction of frame width (for labels / zoom)
     label: str = ""
     face_y: float = 0.32  # face height, fraction of frame height (for tight framings)
+    # "placed" mode: where this character's take may contribute ([x0, x1] of the raw
+    # frame) and how far their cut-out is slid sideways (fraction of frame width)
+    src: list[float] | None = None
+    dx: float = 0.0
+    cut: list[list[float]] | None = None   # boxes [x0, y0, x1, y1] never taken from this take
+    empty: list[float] | None = None       # "overlay": seconds of this take's own empty room
 
 
 @dataclass
@@ -79,6 +85,9 @@ class MSegment:
     # Unison line: everyone speaks at once. Listeners' footage (seg.listen) is their own
     # take of the same line, and their audio is mixed in with the speaker's.
     unison: bool = False
+    # Solo shot: only the speaker's own take, full frame (a line filmed on its own in a
+    # different camera setup, where the others can't be composited in)
+    solo: bool = False
 
 
 @dataclass
@@ -104,7 +113,15 @@ class MPlan:
     # "mirror": clones side by side, layered by comparing against the empty room.
     # "stand_behind": the last character in `depth` is always in front, cut out with a
     # person-segmentation model; everyone else is simply the background footage.
+    # "placed": everyone was filmed in about the same spot; each character is cut out
+    # with their props, slid sideways by Character.dx and laid over the empty room.
+    # "overlay": the camera moved between takes. The first character in `depth` is the
+    # whole background; the others are cut out of their own shots (against their own
+    # Character.empty room), slid by dx and laid on top.
     mode: str = "mirror"
+    # mirror mode: also find each person with the segmentation model (catches a dark
+    # jacket against a dark couch that differs too little from the empty room)
+    seg_bodies: bool = False
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -769,6 +786,14 @@ class LayerCompositor:
             front = self.explicit_depth and n == self.depth[-1]
             b = _person_mask(small[n], self.plate, self.zone[n] & ~exclude, close=31 if front else 11,
                              grow=12 if front else 0)
+            if self.plan.seg_bodies:
+                if not hasattr(self, "_seg"):
+                    self._seg = _FrontMatte()
+                img = np.ascontiguousarray(np.clip(small[n], 0, 255).astype(np.uint8))
+                r = self._seg.seg.segment(self._seg.mp.Image(image_format=self._seg.mp.ImageFormat.SRGB, data=img))
+                person = 1 - np.squeeze(r.confidence_masks[0].numpy_view())
+                person = cv2.resize(person.astype(np.float32), (self.w, self.h)) > 0.5
+                b = b | (person & self.zone[n])
             body[n] = b
         # People on top of the background, in depth order (later = in front).
         person = np.full((self.h, self.w), -1, np.int32)
@@ -903,6 +928,67 @@ class _FrontMatte:
         return np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
 
 
+class _LayerMatte(_FrontMatte):
+    """"placed" mode: the whole foreground of one take - the person (segmentation) plus
+    whatever clearly isn't the empty room and either touches them (something they hold)
+    or stands on the counter (their props) - limited to the columns their take may
+    contribute, edges refined against the frame itself."""
+
+    def __call__(self, frame: np.ndarray, plate: np.ndarray, src: list[float] | None = None,
+                 counter_y: float | None = None) -> np.ndarray:
+        import cv2
+
+        H, W = frame.shape[:2]
+        img = np.ascontiguousarray(np.clip(frame, 0, 255).astype(np.uint8))
+        r = self.seg.segment(self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=img))
+        person = 1 - np.squeeze(r.confidence_masks[0].numpy_view()).astype(np.float32)
+        ph, pw = plate.shape[:2]
+        sm = cv2.resize(img, (pw, ph), interpolation=cv2.INTER_AREA).astype(np.float32)
+        body = (cv2.resize(person, (pw, ph)) > 0.5).astype(np.uint8)
+        far = cv2.dilate(body, np.ones((31, 31), np.uint8)) == 0
+        g = np.ones(3, np.float32)
+        if far.sum() > 500:
+            g = np.median(sm[far], axis=0) / np.maximum(np.median(plate[far], axis=0), 1)
+        diff = (np.abs(sm - plate * g).sum(-1) > 60).astype(np.uint8)
+        diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(diff | body, connectivity=8)
+        touching = set(np.unique(lab[body > 0]).tolist()) - {0}
+        keep = np.zeros(n, bool)
+        for i in range(1, n):
+            bottom = (stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) / ph
+            on_counter = counter_y is not None and bottom >= counter_y and stats[i, cv2.CC_STAT_AREA] >= 40
+            keep[i] = i in touching or on_counter
+        # the person and what they hold always come along; props standing on the counter
+        # only from the columns this take may contribute (src)
+        held = np.isin(lab, list(touching)) if touching else np.zeros_like(body, bool)
+        fg = keep[lab] & ~held
+        if src:
+            cols = np.zeros(pw, bool)
+            cols[int(src[0] * pw):int(np.ceil(src[1] * pw))] = True
+            fg &= cols[None, :]
+        fg = (fg | held).astype(np.uint8)
+        fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
+        h, w = H // 2, W // 2
+        soft = cv2.resize(fg.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+        soft = np.maximum(soft, cv2.resize(np.clip((person - 0.4) / 0.2, 0, 1), (w, h)))
+        guide = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+        a = cv2.ximgproc.guidedFilter(guide, soft, 6, 1e-4)
+        a = np.clip((a - 0.2) / 0.6, 0, 1)                    # tight edge: no foreign room halo
+        return np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
+
+
+def _shift(img: np.ndarray, dx: int) -> np.ndarray:
+    """Slide an image sideways by dx pixels (positive = right), leaving zeros behind."""
+    if dx == 0:
+        return img
+    out = np.zeros_like(img)
+    if dx > 0:
+        out[:, dx:] = img[:, :-dx]
+    else:
+        out[:, :dx] = img[:, -dx:]
+    return out
+
+
 # ---------------------------------------------------------------- rendering
 
 
@@ -946,8 +1032,21 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
     plate, props, scenery, medians, light = background_plate(raw, plan.chars, plan.gains, (W // _DS, H // _DS),
                                                              plan.counter_y, empty=plan.empty)
     comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth or plan.depth)
+    plate_full = None
+    own_plate = {}
+    if plan.mode == "overlay":
+        # takes from different camera setups: no shared room, no cross-take colour fixes
+        for c in plan.chars:
+            if c.empty:
+                own_plate[c.name] = np.median(_sample_at(raw, c.empty[0], c.empty[1] - c.empty[0], 2,
+                                                         W // _DS, H // _DS), axis=0)
+    if plan.mode == "placed" and plan.empty:
+        e0, e1 = plan.empty
+        plate_full = np.median(_sample_at(raw, e0, e1 - e0, min(4.0, 12 / max(e1 - e0, 0.1)), W, H), axis=0)
     # full-resolution lighting correction per take (global gain x smooth local field)
     light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
+    if plan.mode == "overlay":
+        light_full = {n: np.ones((H, W, 3), np.float32) for n in names}
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -987,7 +1086,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
             chunks.append(cur)
 
         def encode(seg_ids: list[int], path: Path, rep_path: Path | None) -> list[dict]:
-            matte = _FrontMatte() if plan.mode == "stand_behind" else None  # per process
+            matte = (_FrontMatte() if plan.mode == "stand_behind" else
+                     _LayerMatte() if plan.mode in ("placed", "overlay") else None)   # per process
             front = (plan.depth or names)[-1]
             done = sum(nframes[:seg_ids[0]])
             report: list[dict] = []
@@ -1021,6 +1121,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 for c in plan.chars:
                     if c.name == seg.char:
                         readers[c.name] = _Reader(raw, seg.start, n, W, H)
+                    elif seg.solo:
+                        continue
                     else:
                         st, rate = seg.listen[c.name]
                         readers[c.name] = _Reader(raw, st, n, W, H, rate)
@@ -1032,10 +1134,38 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 for fi in range(n):
                     fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
-                    eg = comp.exposure(small, exp_state)
-                    fr = {k: np.clip(v * eg[k], 0, 255) for k, v in fr.items()}
-                    small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
-                    if matte is not None:
+                    if not seg.solo and plan.mode != "overlay":
+                        eg = comp.exposure(small, exp_state)
+                        fr = {k: np.clip(v * eg[k], 0, 255) for k, v in fr.items()}
+                        small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
+                    if seg.solo:
+                        out = fr[seg.char].copy()
+                        st, sd = {k: (0, 0.0) for k in names}, 0.0
+                    elif plan.mode == "overlay":
+                        order = plan.depth or names
+                        out = fr[order[0]].copy()
+                        for k in order[1:]:
+                            c = plan.char(k)
+                            a = matte(fr[k], own_plate[k], c.src, None)
+                            for x0, y0, x1, y1 in c.cut or []:
+                                a[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)] = 0
+                            d = int(round(c.dx * W))
+                            a = _shift(a, d)[..., None]
+                            out = a * _shift(fr[k], d) + (1 - a) * out
+                        st, sd = {k: (0, 0.0) for k in names}, 0.0
+                    elif plan.mode == "placed":
+                        # everyone cut out with their props, slid to their spot, over the room
+                        out = plate_full.copy()
+                        for k in (plan.depth or names):
+                            c = plan.char(k)
+                            a = matte(fr[k], comp.plate, c.src, plan.counter_y)
+                            for x0, y0, x1, y1 in c.cut or []:
+                                a[int(y0 * H):int(y1 * H), int(x0 * W):int(x1 * W)] = 0
+                            d = int(round(c.dx * W))
+                            a = _shift(a, d)[..., None]
+                            out = a * _shift(fr[k], d) + (1 - a) * out
+                        st, sd = {k: (0, 0.0) for k in names}, 0.0
+                    elif matte is not None:
                         # stand-behind: front person over the other take's whole frame
                         a = matte(fr[front], comp.plate)[..., None]
                         back = next(k for k in names if k != front)

@@ -81,3 +81,22 @@ segmentation model (models/selfie_segmenter.tflite) and laid over the back clone
 whole frame, so the edge is always clean. Pick framings with `"framing"` so a tight
 shot on the back clone never slices the front clone's face, and hand-pick listening
 footage with `"listen"` (the front clone busy with the product is fine).
+
+## Messy clips: other layouts
+
+Not every clip is a clean left/right split. Check `sides.txt` and a frame tile first:
+- **Three clones:** add "C" to cfg.json, give `"bands"` (two seam ranges), a unison pick
+  lists each other clone's take `[0, "U", a0, a1, false, text, b0, b1, c0, c1]`. If one
+  clone's dark clothes ghost, set `"seg_bodies": true` and put that clone last in `"depth"`.
+- **Solo lines:** a pick whose character ends in "!" ("A!") plays that take alone, full
+  frame. Use it for lines filmed in a different setup (close-ups, product demos).
+- **Same spot:** both clones stood in the same place. `"mode": "placed"`, an `"empty"`
+  room range, and per clone `"place": {"A": {"src": [x0, x1], "dx": -0.06,
+  "cut": [[x0, y0, x1, y1]]}}`: each is cut out with what they hold and their counter props
+  (props only from `src`), slid by `dx`; `cut` boxes drop duplicated props.
+- **Camera moved between takes:** `"mode": "overlay"`, `"depth": [base, other]`: the base
+  clone's footage is the whole background; the other is cut out of their own shot
+  (`"place": {"B": {"empty": [lo, hi], "dx": 0.05}}` = their own empty room) and laid on
+  top. Hand-pick the base clone's listening footage (`"listen"`, value raw_start or
+  [raw_start, rate]) from the same camera setup as their speaking shots.
+- `"starts": {"text prefix": raw_start}` trims quiet lead-in when a pause remains.
