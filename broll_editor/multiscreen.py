@@ -115,6 +115,9 @@ class MPlan:
     # person-segmentation model; everyone else is simply the background footage.
     # "placed": everyone was filmed in about the same spot; each character is cut out
     # with their props, slid sideways by Character.dx and laid over the empty room.
+    # "split": a plain straight split - left part of the frame from the first character's
+    # take, right part from the second's, at `split_x`, the right side's colour matched to
+    # the left along the seam. No cut-outs, no slowed footage: sharp and smooth.
     # "overlay": the camera moved between takes. The first character in `depth` is the
     # whole background; the others are cut out of their own shots (against their own
     # Character.empty room), slid by dx and laid on top.
@@ -122,6 +125,7 @@ class MPlan:
     # mirror mode: also find each person with the segmentation model (catches a dark
     # jacket against a dark couch that differs too little from the empty room)
     seg_bodies: bool = False
+    split_x: float = 0.5
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=1))
@@ -1033,6 +1037,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                                                              plan.counter_y, empty=plan.empty)
     comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth or plan.depth)
     plate_full = None
+    xs = np.arange(W, dtype=np.float32)
+    seam_ramp = np.clip((xs - plan.split_x * W) / 8 + 0.5, 0, 1)   # ~8px soft edge on the line
     own_plate = {}
     if plan.mode == "overlay":
         # takes from different camera setups: no shared room, no cross-take colour fixes
@@ -1045,7 +1051,7 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
         plate_full = np.median(_sample_at(raw, e0, e1 - e0, min(4.0, 12 / max(e1 - e0, 0.1)), W, H), axis=0)
     # full-resolution lighting correction per take (global gain x smooth local field)
     light_full = {n: cv2.resize(light[n], (W, H), interpolation=cv2.INTER_LINEAR) * gains[n] for n in names}
-    if plan.mode == "overlay":
+    if plan.mode in ("overlay", "split"):
         light_full = {n: np.ones((H, W, 3), np.float32) for n in names}
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -1134,12 +1140,26 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                 for fi in range(n):
                     fr = {k: np.clip(r.read().astype(np.float32) * light_full[k], 0, 255) for k, r in readers.items()}
                     small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
-                    if not seg.solo and plan.mode != "overlay":
+                    if not seg.solo and plan.mode not in ("overlay", "split"):
                         eg = comp.exposure(small, exp_state)
                         fr = {k: np.clip(v * eg[k], 0, 255) for k, v in fr.items()}
                         small = {k: v[::_DS, ::_DS] for k, v in fr.items()}
                     if seg.solo:
                         out = fr[seg.char].copy()
+                        st, sd = {k: (0, 0.0) for k in names}, 0.0
+                    elif plan.mode == "split":
+                        L, R = plan.chars[0].name, plan.chars[1].name
+                        x = int(round(plan.split_x * W))
+                        band = slice(max(0, x - 60), x), slice(x, min(W, x + 60))
+                        sl, sr = fr[L][int(H * 0.15):int(H * 0.85), band[0]], fr[R][int(H * 0.15):int(H * 0.85), band[1]]
+                        g = np.clip(np.median(sl.reshape(-1, 3), 0) / np.maximum(np.median(sr.reshape(-1, 3), 0), 1),
+                                    0.75, 1.33).astype(np.float32)
+                        prev = exp_state.get("split")
+                        g = g if prev is None else 0.9 * prev + 0.1 * g     # steady, no flicker
+                        exp_state["split"] = g
+                        right = np.clip(fr[R] * g, 0, 255)
+                        out = np.where(seam_ramp[None, :, None] > 0, right * seam_ramp[None, :, None] +
+                                       fr[L] * (1 - seam_ramp[None, :, None]), fr[L])
                         st, sd = {k: (0, 0.0) for k in names}, 0.0
                     elif plan.mode == "overlay":
                         order = plan.depth or names

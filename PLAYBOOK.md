@@ -82,6 +82,16 @@ whole frame, so the edge is always clean. Pick framings with `"framing"` so a ti
 shot on the back clone never slices the front clone's face, and hand-pick listening
 footage with `"listen"` (the front clone busy with the product is fine).
 
+## Plain split (preferred whenever each clone stays on their own side)
+
+`"mode": "split"`, `"split_x": 0.45`: a straight line down the frame, left side from A's
+take, right side from B's, B's colour matched to A along the line. No cut-outs, no
+slowed footage, no zoom on the split shots, so it stays sharp and smooth. The user
+prefers this over cut-out composites ("blurry and laggy"). Pick split_x where neither
+clone crosses it, and hand-pick listening footage (`"listen"`) where each listener stays
+on their own side and faces the speaker. Use the cut-out modes below only when a
+straight line cannot work.
+
 ## Split screen only for the opener (when the user asks for it)
 
 Some videos use the split screen only for the intro lines and the unison line; every

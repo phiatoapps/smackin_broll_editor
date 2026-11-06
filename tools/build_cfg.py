@@ -95,7 +95,8 @@ plan.label_changes = cfg.get("label_changes", {})
 plan.empty = cfg.get("empty")      # [lo, hi] seconds of empty room, if the clip has some
 plan.depth = cfg.get("depth")      # ["B", "A"]: back to front (stand-behind format)
 plan.mode = cfg.get("mode", "mirror")
-plan.seg_bodies = cfg.get("seg_bodies", False)  # "stand_behind": front clone cut out over the other take
+plan.seg_bodies = cfg.get("seg_bodies", False)
+plan.split_x = cfg.get("split_x", 0.5)  # "stand_behind": front clone cut out over the other take
 plan.gains = ms.match_gains(P, chars)
 print(os.path.basename(D), ms.tighten(plan, env, thr=0.015, words=words))
 # hand-checked line starts: {"text prefix": raw_start} trims quiet lead-in off the first
@@ -145,6 +146,12 @@ for prefix, who in cfg.get("listen", {}).items():
         for sg in [x for x in plan.segments if x.text.startswith(prefix)]:
             sg.listen[n] = [round(st, 3), rate]
             st += sg.duration * rate
+if plan.mode == "split":
+    for sg in plan.segments:
+        if not sg.solo:   # full-res, full-speed: no zooms on the split, listeners at 1x
+            sg.framing, sg.pull_out = None, None
+            for n, (st, rate) in list(sg.listen.items()):
+                sg.listen[n] = [st, 1.0]
 plan.save(f"{D}/plan.json")
 t = 0
 for i, s in enumerate(plan.segments):
