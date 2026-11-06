@@ -981,6 +981,55 @@ class _LayerMatte(_FrontMatte):
         return np.clip(cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR), 0, 1)
 
 
+def _split_join(left: np.ndarray, right: np.ndarray, split_x: float, prev: np.ndarray | None,
+                band: int = 90, feather: int = 70) -> tuple[np.ndarray, np.ndarray]:
+    """Straight split with no visible line. The right take is colour-matched to the left
+    row by row (a smooth gain field measured where the two takes agree along the line, so
+    uneven room lighting - lamps on in one take - is matched at every height), then the two
+    are cross-faded over a wide band wherever both show plain room, and over a few pixels
+    only where a person is near the line. `prev` carries the gain field between frames."""
+    import cv2
+
+    H, W = left.shape[:2]
+    x = int(round(split_x * W))
+    x0, x1 = max(0, x - band), min(W, x + band)
+    ls = cv2.resize(left[:, x0:x1], ((x1 - x0) // 4, H // 4), interpolation=cv2.INTER_AREA)
+    rs = cv2.resize(right[:, x0:x1], ((x1 - x0) // 4, H // 4), interpolation=cv2.INTER_AREA)
+    ratio = (ls + 4) / (rs + 4)
+    rough = np.median(ratio.reshape(-1, 3), 0)
+    agree = np.abs(ls - rs * rough).sum(-1) < 45                     # both show the room here
+    rows = np.ones((H // 4, 3), np.float32)
+    wsum = agree.sum(1)
+    for k in range(3):
+        num = np.where(agree, ratio[..., k], 0).sum(1)
+        rows[:, k] = np.where(wsum > 0, num / np.maximum(wsum, 1), np.nan)
+    good = ~np.isnan(rows[:, 0])
+    if good.sum() >= 5:
+        idx = np.arange(len(rows))
+        for k in range(3):
+            rows[:, k] = np.interp(idx, idx[good], rows[good, k])
+    else:
+        rows[:] = rough
+    rows = cv2.GaussianBlur(rows[:, None, :], (1, 0), sigmaX=0.1, sigmaY=12)[:, 0, :]
+    rows = np.clip(rows, 0.6, 1.6).astype(np.float32)
+    if prev is not None and prev.shape == rows.shape:
+        rows = 0.85 * prev + 0.15 * rows                              # steady, no flicker
+    gain = cv2.resize(rows[:, None, :], (1, H), interpolation=cv2.INTER_LINEAR)[:, 0, :]
+    rg = np.clip(right * gain[:, None, :], 0, 255)
+    # cross-fade width per pixel: wide where both agree, a few px where they don't
+    d = np.abs(left[:, x0:x1] - rg[:, x0:x1]).sum(-1)
+    calm = cv2.GaussianBlur((d < 40).astype(np.float32), (0, 0), 9)
+    cols = np.arange(x0, x1, dtype=np.float32) - x
+    wide = np.clip(cols / (2 * feather) + 0.5, 0, 1)
+    narrow = np.clip(cols / 8 + 0.5, 0, 1)
+    wgt = np.where(calm > 0.95, wide[None, :], narrow[None, :] + (wide[None, :] - narrow[None, :]) * calm)
+    wgt = cv2.GaussianBlur(wgt.astype(np.float32), (0, 0), 3)
+    out = left.copy()
+    out[:, x1:] = rg[:, x1:]
+    out[:, x0:x1] = left[:, x0:x1] * (1 - wgt[..., None]) + rg[:, x0:x1] * wgt[..., None]
+    return out, rows
+
+
 def _shift(img: np.ndarray, dx: int) -> np.ndarray:
     """Slide an image sideways by dx pixels (positive = right), leaving zeros behind."""
     if dx == 0:
@@ -1037,8 +1086,6 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                                                              plan.counter_y, empty=plan.empty)
     comp = LayerCompositor(plan, plate, props, scenery, medians, depth=depth or plan.depth)
     plate_full = None
-    xs = np.arange(W, dtype=np.float32)
-    seam_ramp = np.clip((xs - plan.split_x * W) / 8 + 0.5, 0, 1)   # ~8px soft edge on the line
     own_plate = {}
     if plan.mode == "overlay":
         # takes from different camera setups: no shared room, no cross-take colour fixes
@@ -1148,18 +1195,8 @@ def render_multi(raw: str | Path, plan: MPlan, output: str | Path, *, width: int
                         out = fr[seg.char].copy()
                         st, sd = {k: (0, 0.0) for k in names}, 0.0
                     elif plan.mode == "split":
-                        L, R = plan.chars[0].name, plan.chars[1].name
-                        x = int(round(plan.split_x * W))
-                        band = slice(max(0, x - 60), x), slice(x, min(W, x + 60))
-                        sl, sr = fr[L][int(H * 0.15):int(H * 0.85), band[0]], fr[R][int(H * 0.15):int(H * 0.85), band[1]]
-                        g = np.clip(np.median(sl.reshape(-1, 3), 0) / np.maximum(np.median(sr.reshape(-1, 3), 0), 1),
-                                    0.75, 1.33).astype(np.float32)
-                        prev = exp_state.get("split")
-                        g = g if prev is None else 0.9 * prev + 0.1 * g     # steady, no flicker
-                        exp_state["split"] = g
-                        right = np.clip(fr[R] * g, 0, 255)
-                        out = np.where(seam_ramp[None, :, None] > 0, right * seam_ramp[None, :, None] +
-                                       fr[L] * (1 - seam_ramp[None, :, None]), fr[L])
+                        out, exp_state["split"] = _split_join(fr[plan.chars[0].name], fr[plan.chars[1].name],
+                                                              plan.split_x, exp_state.get("split"))
                         st, sd = {k: (0, 0.0) for k in names}, 0.0
                     elif plan.mode == "overlay":
                         order = plan.depth or names
